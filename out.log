@@ -1,0 +1,10 @@
+
+VCFtools - v0.1.12a
+(C) Adam Auton and Anthony Marcketta 2009
+
+Parameters as interpreted:
+	--vcf test/temp.vvcf
+
+After filtering, kept 21 out of 21 Individuals
+After filtering, kept 21 out of a possible 21 Sites
+Run Time = 1.00 seconds
