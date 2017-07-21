@@ -25,7 +25,6 @@ add_executable(m3vcftools
   src/m3vcfRecord.cpp
   src/Main.cpp
   src/Tokenize.cpp
-  src/VcfRecordGenotype.cpp
   src/Unique.cpp)
 
 target_link_libraries(m3vcftools ${STATGEN_LIBRARY} ${ZLIB_LIBRARIES})
