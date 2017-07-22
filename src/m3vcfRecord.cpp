@@ -1,5 +1,39 @@
 #include "m3vcfRecord.h"
 
+void m3vcfRecord::copyStartInfotoBlock(m3vcfBlock &thisBlock)
+{
+    thisBlock.setChrom(myChrom);
+    thisBlock.setStartBasePosition(BasePositionVal);
+}
+
+
+void m3vcfRecord::copyEndInfotoBlock(m3vcfBlock &thisBlock)
+{
+    thisBlock.setEndBasePosition(BasePositionVal);
+}
+
+
+void m3vcfRecord::copyFromVcfRecord(VcfRecord &thisRecord)
+{
+    myChrom = thisRecord.getChromStr();
+    BasePositionVal = thisRecord.get1BasedPosition();
+    varID = thisRecord.getIDStr();
+    refAlleleString = thisRecord.getRefStr();
+    allAltAlleleString = thisRecord.getAltStr();
+    infoString.clear();
+    for (int i = 0; i < thisRecord.getInfo().getNumInfoFields(); ++i)
+    {
+        std::pair<std::string, std::string> p = thisRecord.getInfo().getInfoPair(i);
+        if (i != 0)
+            infoString += ";";
+        infoString += p.first;
+        if (p.second.size())
+            infoString += "=" + p.second;
+    }
+
+}
+
+
 m3vcfRecord::m3vcfRecord()
 {
     reset();

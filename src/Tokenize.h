@@ -14,5 +14,6 @@ void MyTokenize(vector<string> &result, const char *input, const char *delimiter
 string FindTokenWithPrefix(const char *input,const char *delimiter, string CheckPrefix);
 
 
+int MyTokenize(vector<string> &result, const char *input, const char *delimiter);
 
 #endif

@@ -3,9 +3,11 @@
 #define __M3VCF_HEADER_H__
 
 #include <vector>
+#include <VcfHeader.h>
 #include "StringArray.h"
 #include "StatGenStatus.h"
 #define NUM_M3VCF_NON_SAMPLE_HEADER_COLS 9
+#define M3VCF_VERSION "2.0"
 using namespace std;
 
 /// This header file provides interface for dealing with M3VCF Meta/Header lines.
@@ -24,6 +26,25 @@ public:
     /// the specified filePtr, false if not.
     bool read(IFILE filePtr);
 
+    
+    
+    
+    /// This function copies header information from VcfHeader
+    /// and updates to m3vcf header
+    void copyHeader(VcfHeader &thisHeader)
+    {
+        myHeaderLinesNew.clear();
+        myHeaderLinesNew.push_back("##fileformat=M3VCFv"+(string)M3VCF_VERSION);
+        
+        myHeaderLinesNew.resize(thisHeader.getNumMetaLines()+1);
+        for(int i=1; i<thisHeader.getNumMetaLines(); i++)
+        {
+            myHeaderLinesNew[i]=thisHeader.getMetaLine(i);            
+        }
+        myHeaderLinesNew[thisHeader.getNumMetaLines()]=thisHeader.getHeaderLine();             
+    }
+    
+    
     /// Write the header to the specified file.
     /// \param filePtr IFILE to write to.
     /// \return true if an entire meta/header was successfully written to
@@ -56,7 +77,6 @@ public:
     /// Returns the number of samples in the header line or 0 if the header
     /// line has not yet been read.
     int getNumSamples()  {return numSamples;} ;
-    int getNumHaplotypes() {return numHaplotypes;} ;
 
     /// Returns the name of the specified sample or NULL if the sample number
     /// is out of range (first sample is index 0).
@@ -106,8 +126,9 @@ private:
     // Is set to true once the header line has been set, false until then.
     bool myHasHeaderLine;
 
-    int numSamples,numHaplotypes;
+    int numSamples;
     std::vector<String> myHeaderLines;
+    std::vector<string> myHeaderLinesNew;
     std::vector<string> SampleNames;
     std::vector<int> SamplePloidy;
 

@@ -19,7 +19,7 @@ bool m3vcfBlock::read(IFILE filePtr, m3vcfHeader &ThisHeader,
 {
     // Clear out any previously set values.
     reset();
-    const char *equalSep="=",*semicolSep=";";
+    const char *equalSep="=",*semicolSep=";", *GenoDelim =GENOTYPE_DELIMITER ;
     std::string tempString;
 
     if(filePtr == NULL)
@@ -61,11 +61,9 @@ bool m3vcfBlock::read(IFILE filePtr, m3vcfHeader &ThisHeader,
     {
         // Read the positions, so convert them to an integer.
         char *end_str;
-//        cout<<" STRING = "<<tempString<<endl;
         char  *pch  = strtok_r ((char*)tempString.c_str(),"-", &end_str);
         startPosition = atoi(pch);
         pch  = strtok_r (NULL,"-", &end_str);
-//        cout<<" WAIT "<<pch<<endl;
         if(!pch)
         {
             myStatus.setStatus(StatGenStatus::FAIL_PARSE,
@@ -93,7 +91,9 @@ bool m3vcfBlock::read(IFILE filePtr, m3vcfHeader &ThisHeader,
     else
     {
         // Read Number of Markers
-        string InfoString = FindTokenWithPrefix(tempString.c_str(),semicolSep, "VARIANTS=");
+//        cout<<tempString<<endl; 
+        string InfoString = FindTokenWithPrefix(tempString.c_str(), semicolSep, "VARIANTS=");
+//        cout<<" THIS = "<<InfoString<<endl;
         if(InfoString!="") { numMarkers = atoi(MyTokenize(InfoString.c_str(), equalSep, 2).c_str());}
         else
         {
@@ -126,12 +126,13 @@ bool m3vcfBlock::read(IFILE filePtr, m3vcfHeader &ThisHeader,
 
 
     int index = 0;
-    UniqueIndexMap.resize(ThisHeader.getNumHaplotypes());
-    while(index<ThisHeader.getNumHaplotypes())
-    {
-//        cout<<tempString<<endl;
+    numSamples = ThisHeader.getNumSamples();
+    SampleNoHaplotypes.resize(numSamples);
+    UniqueIndexMap.clear();
+    while(index<numSamples)
+    { 
         tempString.clear();
-        if(!readTilTab(filePtr, tempString) && index<ThisHeader.getNumHaplotypes()-1)
+        if(!readTilTab(filePtr, tempString) && index<numSamples-1)
         {
             myStatus.setStatus(StatGenStatus::FAIL_PARSE,
                                "Error reading M3VCF UNIQUE INDEX MAP.");
@@ -139,7 +140,16 @@ bool m3vcfBlock::read(IFILE filePtr, m3vcfHeader &ThisHeader,
         }
         else
         {
-            UniqueIndexMap[index++]=atoi(tempString.c_str());
+            vector<string> tempMap;
+            SampleNoHaplotypes[index] = MyTokenize(tempMap, tempString.c_str(), GenoDelim);
+            numHaplotypes+=SampleNoHaplotypes[index];
+            
+            UniqueIndexMap.push_back(atoi(tempMap[0].c_str()));
+            if(SampleNoHaplotypes[index]>1)
+                UniqueIndexMap.push_back(atoi(tempMap[1].c_str()));
+            
+            index++;
+            
         }
     }
     return(true);
@@ -154,6 +164,8 @@ void m3vcfBlock::reset()
     startPosition = -2;
     endPosition = -1;
     numMarkers = 0;
+    numSamples = 0;
+    numHaplotypes = 0;
     numUniqueReps = 0;
     myChrom.clear();
     myStatus = StatGenStatus::SUCCESS;
@@ -194,10 +206,15 @@ bool m3vcfBlock::write(IFILE filePtr, bool siteOnly)
         ifprintf(filePtr, "%d-%d\t", startPosition, endPosition);
     }
 
-    ifprintf(filePtr, "<BLOCK>\t.\t.\t.\t.\tVARIANTS=%d,REPS=%d\t.", numMarkers, numUniqueReps);
-    for(int i=0;i<(int)UniqueIndexMap.size();i++)
+    ifprintf(filePtr, "<BLOCK>\t.\t.\t.\t.\tVARIANTS=%d;REPS=%d\t.", numMarkers, numUniqueReps);
+    int index=0;
+//     cout<<" BUT WHAT ABOUT THIS = "<<numSamples<<endl;
+     
+    for(int i=0;i<numSamples;i++)
     {
-        ifprintf(filePtr, "\t%d",UniqueIndexMap[i]);
+        ifprintf(filePtr, "\t%d",UniqueIndexMap[index++]);
+        if(SampleNoHaplotypes[i]==2)
+            ifprintf(filePtr, "|%d",UniqueIndexMap[index++]);
     }
     ifprintf(filePtr, "\n");
 

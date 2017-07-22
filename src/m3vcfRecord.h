@@ -15,7 +15,7 @@
 using namespace std;
 typedef char AlleleType;
 
-/// This header file provides interface to read/write VCF files.
+/// This header file provides interface to read/write M3VCF files.
 class m3vcfRecord
 {
 
@@ -82,39 +82,21 @@ public:
     /// false if not.
     bool write(IFILE filePtr, bool siteOnly);
 
-    void copyFromVcfRecord(VcfRecord &thisRecord)
-    {
-            myChrom = thisRecord.getChromStr();
-            BasePositionVal = thisRecord.get1BasedPosition();
-            varID = thisRecord.getIDStr();
-            refAlleleString = thisRecord.getRefStr();
-            allAltAlleleString = thisRecord.getAltStr();
-//            infoString = thisRecord.getInfo();
-//            int infoSize = thisRecord.getInfo().getNumInfoFields();
-//            infoString.clear();
-//              
-//            for(int i = 0; i < infoSize; i++)
-//            {
-//                InfoElement& info = thisRecord.getInfo().get(i);
-//                
-//                if(i != 0) infoString+= ";";
-//                if(info.value.empty()) infoString+= info.key.c_str();
-//                else infoString+= info.key.c_str()+"="+info.value.c_str();
-//            }
 
-   
-    }
+    /// Copy variant info from VcfRecord into m3vcf Record
+    /// \return is void
+    /// \param thisRecord is the VCF Record from which to copy variant information
+    void copyFromVcfRecord(VcfRecord &thisRecord);
 
-    void copyStartInfotoBlock(m3vcfBlock &thisBlock)
-    {
-        thisBlock.setChrom(myChrom);
-        thisBlock.setStartBasePosition(BasePositionVal);
-    }
-    void copyEndInfotoBlock(m3vcfBlock &thisBlock)
-    {
-        thisBlock.setEndBasePosition(BasePositionVal);
-    }
 
+    /// The following two functions copy Start and End position from m3vcfRecord
+    /// to the m3vcfBlock type
+    void copyStartInfotoBlock(m3vcfBlock &thisBlock);
+    void copyEndInfotoBlock(m3vcfBlock &thisBlock);
+
+    /// Delete INFO information
+    /// to the m3vcfBlock type
+    void clearInfo(){infoString.clear();}
 
 
 

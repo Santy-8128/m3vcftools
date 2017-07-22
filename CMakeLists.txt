@@ -18,9 +18,11 @@ find_library(STATGEN_LIBRARY StatGen)
 add_executable(m3vcftools
   src/Concat.cpp
   src/Compress.cpp
+  src/Convert.cpp
   src/m3vcfBlock.cpp
   src/m3vcfFile.cpp
   src/m3vcfFileWriter.cpp
+  src/m3vcfFileReader.cpp
   src/m3vcfHeader.cpp
   src/m3vcfRecord.cpp
   src/Main.cpp

@@ -66,8 +66,11 @@ template <class HeaderType> bool m3vcfFileWriter<HeaderType>::open(const char* f
                          InputFile::ifileCompression compressionMode)
 {
 //    myStatus = StatGenStatus::SUCCESS;
+    
     if(m3vcfFile::open(filename, "w", compressionMode))
     {
+    abort();
+   
         // Successfully opened, so write the header.
         if(!header.write(myFilePtr))
         {

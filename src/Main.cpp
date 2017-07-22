@@ -10,6 +10,7 @@
 static void usage(FILE *fp);
 int main_m3vcfconcat(int argc, char *argv[]);
 int main_m3vcfcompress(int argc, char *argv[]);
+int main_m3vcfconvert(int argc, char *argv[]);
 
 
 typedef struct
@@ -34,25 +35,15 @@ static cmd_t cmds[] =
       .alias = "concat",
       .help  = "concatenate M3VCF files from the same set of samples"
     },
-    { .func  = NULL, //main_vcfconvert,
+    { .func  = main_m3vcfconvert, //main_vcfconvert,
       .alias = "convert",
       .help  = "convert M3VCF files to different formats and back"
-    },
-
-
-
-    { .func  = NULL,
-      .alias = "M3VCF analysis",
-      .help  = NULL
-    },
-    { .func  = NULL, //main_vcffilter,
-      .alias = "filter",
-      .help  = "filter M3VCF files using fixed thresholds"
     },
     { .func  = NULL,
       .alias = NULL,
       .help  = NULL
     }
+
 };
 
 const char *m3vcftools_version(void)

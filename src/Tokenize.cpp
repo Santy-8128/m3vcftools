@@ -64,6 +64,36 @@ void MyTokenize(vector<string> &result, const char *input, const char *delimiter
 
 }
 
+int MyTokenize(vector<string> &result, const char *input, const char *delimiter)
+{
+
+    size_t wordCount = 1;
+    result.clear();
+    result.resize(1);
+    std::string *word = &result[0];
+
+
+    while (*input)
+    {
+        if (*input==*delimiter)
+        {
+            // we got a delimeter, and since an empty word following
+            // a delimeter still counts as a word, we allocate it here
+            wordCount++;
+            result.resize(wordCount);
+            word = &result[wordCount-1];
+        }
+        else
+        {
+            word->push_back(*input);
+        }
+        input++;
+    }
+    return wordCount;
+
+}
+
+
 string FindTokenWithPrefix(const char *input,const char *delimiter, string CheckPrefix)
 {
 
@@ -71,20 +101,17 @@ string FindTokenWithPrefix(const char *input,const char *delimiter, string Check
     int Size = (int)CheckPrefix.size();
     while (*input)
     {
-        if (*input==*delimiter)
+        int Index=0;
+//            ++input;
+        while(*input)
         {
-            int Index=0;
-            ++input;
-            while(*input)
-            {
-                word=word + (*input);
-                if(Index<Size && *input!=CheckPrefix[Index++])
-                    break;
+            word=word + (*input);
+            if(Index<Size && *input!=CheckPrefix[Index++])
+                break;
 
-                ++input;
-                if(*input==*delimiter || *input=='\0')
-                    return word;
-            }
+            ++input;
+            if(*input==*delimiter || *input=='\0')
+                return word;
         }
         input++;
         word="";

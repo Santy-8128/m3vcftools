@@ -5,12 +5,14 @@
 #include <stdlib.h>
 #include "Tokenize.h"
 #include "m3vcfHeader.h"
+#include "VcfRecord.h"
 #include "VcfRecordFilter.h"
 #include "VcfRecordInfo.h"
 #include "VcfRecordGenotype.h"
 #include "StatGenStatus.h"
 #include "VcfRecordDiscardRules.h"
 #define LENGTH_OF_BLOCK_ID 7
+#define GENOTYPE_DELIMITER "|"
 using namespace std;
 
 /// This header file provides interface to read/write VCF files.
@@ -22,16 +24,18 @@ private:
     m3vcfBlock& operator=(const m3vcfBlock& thisRecord);
 
     static const char ALT_DELIM = ',';
-
+    
     int NoMarkersRead;
     bool FinishedReadingBlock;
     std::string myChrom;
     int startPosition;
     int endPosition;
     int numMarkers;
+    int numSamples;
+    int numHaplotypes;
     int numUniqueReps;
     vector<int> UniqueIndexMap;
-
+    vector<int> SampleNoHaplotypes;
     // The status of the last failed command.
     StatGenStatus myStatus;
 
@@ -98,6 +102,21 @@ public:
     /// \return true if a line was successfully written to the specified filePtr,
     /// false if not.
     bool write(IFILE filePtr, bool siteOnly);
+
+    
+    /// This function copies ploidy information from VCF record
+    /// \return is NULL
+    /// \param is VcfRecord type
+    void updatePloidy(VcfRecord &thisRecord)
+    {
+        numSamples=thisRecord.getNumSamples();
+
+        SampleNoHaplotypes.resize(numSamples);
+        for (int i = 0; i<(numSamples); i++)
+        {
+            SampleNoHaplotypes[i]=(thisRecord.getNumGTs(i));
+        }
+    }
 
 //
 

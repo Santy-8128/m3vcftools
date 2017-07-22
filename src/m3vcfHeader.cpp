@@ -78,7 +78,6 @@ void m3vcfHeader::reset()
     SampleNames.clear();
     SamplePloidy.clear();
     numSamples=0;
-    numHaplotypes=0;
 }
 
 
@@ -88,34 +87,16 @@ bool m3vcfHeader::SparseSampleNames()
 
     while(position<myParsedHeaderLine.Length())
     {
-        string tempString=(string)myParsedHeaderLine[position];
-        string HaploID=tempString.substr(tempString.size()-1,1);
-        string SampleName=tempString.substr(0,tempString.size()-6);
-        numHaplotypes++;
-        if(HaploID=="1")
-        {
-            SampleNames.push_back(SampleName);
-            SamplePloidy.push_back(1);
-            numSamples++;
-        }
-        else if(HaploID=="2")
-        {
-            SamplePloidy.back()=2;
-        }
-        else
-        {
-            myStatus.setStatus(StatGenStatus::INVALID,
-                               "Error reading VCF Meta/Header, Name suffix cannot be more than 2");
-            return(false);
-        }
+        SampleNames.push_back((string)myParsedHeaderLine[position]);
         position++;
-
     }
+    numSamples=(int)SampleNames.size();
     return true;
 }
 
 bool m3vcfHeader::write(IFILE filePtr)
 {
+    
     if(filePtr == NULL)
     {
         // No file was passed in.
@@ -124,25 +105,12 @@ bool m3vcfHeader::write(IFILE filePtr)
         return(false);
     }
 
-    // Make sure the last header line is synced with the parsed header line.
-    syncHeaderLine();
-
-    int numWritten = 0;
-    int numExpected = 0;
-    for(std::vector<String>::iterator iter = myHeaderLines.begin();
-        iter != myHeaderLines.end(); iter++)
+    for(std::vector<string>::iterator iter = myHeaderLinesNew.begin();
+        iter != myHeaderLinesNew.end(); iter++)
     {
-        numWritten += ifprintf(filePtr, "%s\n", iter->c_str());
-        // expected to write string + new line.
-        numExpected += iter->Length();
-        numExpected += 1;
+        ifprintf(filePtr, "%s\n", iter->c_str());
+        
     }
-    if(numWritten != numExpected)
-    {
-        myStatus.setStatus(StatGenStatus::FAIL_IO,
-                           "Failed writing VCF Meta/Header.");
-    }
-    return(numWritten == numExpected);
 }
 // Return the error after a failed call.
 const StatGenStatus& m3vcfHeader::getStatus()
@@ -207,7 +175,6 @@ void m3vcfHeader::mergeHeader(m3vcfHeader &Header)
     if(myHeaderLines.size()==0)
     {
         numSamples=Header.numSamples;
-        numHaplotypes=Header.numHaplotypes;
         myHeaderLines=Header.myHeaderLines;
         SampleNames=Header.SampleNames;
         SamplePloidy=Header.SamplePloidy;
