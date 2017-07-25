@@ -74,8 +74,9 @@ static void compress_Data(args_t *args)
     myHeader.read(firstFile);
 ////    args->out_hdr.mergeHeader(myHeader);
 //      
-    args->outFile.open(args->output_fname,myHeader);
+    args->outFile.open(args->output_fname,args->out_hdr);
 
+//    args->outFile.open(args->output_fname, args->out_hdr, args->output_type==4? InputFile::UNCOMPRESSED : InputFile::GZIP); 
 //    while(firstFileBlock.read(firstFile,myHeader))
 //    {
 //        args->outFile.writeBlock(firstFileBlock);

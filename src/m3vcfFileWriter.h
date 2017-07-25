@@ -69,7 +69,7 @@ template <class HeaderType> bool m3vcfFileWriter<HeaderType>::open(const char* f
     
     if(m3vcfFile::open(filename, "w", compressionMode))
     {
-    abort();
+    //abort();
    
         // Successfully opened, so write the header.
         if(!header.write(myFilePtr))

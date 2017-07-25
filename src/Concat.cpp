@@ -20,7 +20,7 @@
 using namespace std;
 
 
-typedef struct _args_t
+struct args_t
 {
 //    bcf_srs_t *files;
 //    htsFile *out_fh;
@@ -43,8 +43,8 @@ typedef struct _args_t
     const char *output_fname, *file_list; //, , , , *remove_dups, *regions_list;
     int phased_concat, nfnames, argc; //, , allow_overlaps, , regions_is_file;
 //    int compact_PS, phase_set_changed, naive_concat;
-}
-args_t;
+};
+
 
 
 void error(const char *format, ...)
