@@ -19,7 +19,7 @@
 using namespace std;
 
 
-typedef struct _args_t
+struct args_t
 {
 
     //VCF File Variables
@@ -47,8 +47,7 @@ typedef struct _args_t
     int argc, output_type, record_cmd_line;
     char *sample_include_list, *sample_exlcude_list;
 
-}
-args_t;
+};
 
 static void error(const char *format, ...)
 {
