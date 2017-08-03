@@ -72,8 +72,7 @@ static void CompressAndFlushChunk(args_t *args)
                 markerIndex--;
             ThisChunkCompressor.GetBlockHeader(args->Haplotypes,args->myM3vcfBlock);
             // Copy ploidy information from last read VcfRecord
-            
-//            abort();
+
             args->myM3vcfRecordList[markerIndex].copyStartInfotoBlock(args->myM3vcfBlock);
             args->myM3vcfRecordList[ThisChunkCompressor.getBlockHeaderEndPosition()].copyEndInfotoBlock(args->myM3vcfBlock);
             args->outFile.writeBlock(args->myM3vcfBlock);
@@ -207,6 +206,8 @@ static void compress_Data(args_t *args)
     // If more than one variant is left compress whatever is left behind
     if(args->Haplotypes[0].length()>1)
         CompressAndFlushChunk(args);
+
+    args->outFile.close();
     
 }
 
