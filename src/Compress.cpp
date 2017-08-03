@@ -207,7 +207,7 @@ static void compress_Data(args_t *args)
     if(args->Haplotypes[0].length()>1)
         CompressAndFlushChunk(args);
 
-    args->outFile.close();
+    args->outFile.close(); 
     
 }
 
