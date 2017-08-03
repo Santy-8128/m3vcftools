@@ -35,7 +35,7 @@ struct args_t
     m3vcfFileWriter <m3vcfHeader> outFile;
     vector<m3vcfRecord> myM3vcfRecordList;
     m3vcfBlock myM3vcfBlock;
-    bool contiguous, keepInfo;
+    bool contiguous, keepInfo, fixedLength;
     int numHaplotypes;
     
     // Haplotype Data
@@ -61,7 +61,7 @@ static void error(const char *format, ...)
 static void CompressAndFlushChunk(args_t *args)
 {
     Compressor <vector<string> > ThisChunkCompressor;
-    ThisChunkCompressor.CompressChunk(args->Haplotypes);
+    ThisChunkCompressor.CompressChunk(args->Haplotypes, args->fixedLength);
 
     int markerIndex=0;
     while(markerIndex<args->Haplotypes[0].length())
@@ -221,6 +221,8 @@ static void usage(args_t *args)
     fprintf(stderr, "       --no-version               do not append version and command line to the header\n");
     fprintf(stderr, "   -S, --samples-file [^]<file>   file of samples to include (or exclude with \"^\" prefix)\n");
     fprintf(stderr, "   -k, --keep-info                Copy INFO column to M3VCF file \n");
+    fprintf(stderr, "   -f, --fixed-length             Compress fixed block lengths; No optimization done \n");
+    fprintf(stderr, "                                  (faster, but use with caution)  \n");
     fprintf(stderr, "   -b, --buffer <int>             Number of variants to compress at a time [1000]\n");
     fprintf(stderr, "   -o, --output <file>            Write output to a file [standard output]\n");
     fprintf(stderr, "   -O, --output-type <m|M>        m: compressed M3VCF, M: uncompressed M3VCF [M] \n");
@@ -236,6 +238,7 @@ int main_m3vcfcompress(int argc, char *argv[])
     int c;
     args_t* args = new args_t();
     args->argc    = argc; args->argv = argv;
+    args->fixedLength = false;
     args->output_fname = "-";
     args->output_type = M3VCF;
     args->bufferSize = 1000;
@@ -250,6 +253,7 @@ int main_m3vcfcompress(int argc, char *argv[])
         {"samples-file",required_argument,NULL,'S'},
         {"non-contiguous",no_argument,NULL,'n'},
         {"keep-info",no_argument,NULL,'k'},
+        {"fixed-length",no_argument,NULL,'f'},
         {"buffer",required_argument,NULL,'b'},
         {"output",required_argument,NULL,'o'},
         {"output-type",required_argument,NULL,'O'},
@@ -257,12 +261,13 @@ int main_m3vcfcompress(int argc, char *argv[])
         {NULL,0,NULL,0}
     };
 
-    while ((c = getopt_long(argc, argv, "b:o:O:kS:",loptions,NULL)) >= 0)
+    while ((c = getopt_long(argc, argv, "b:o:O:kfS:",loptions,NULL)) >= 0)
     {
         switch (c) {
             case 'b': args->bufferSize = strtol(optarg, 0, 0); break;
             case 'o': args->output_fname = optarg; break;
             case 'n': args->contiguous = false; break;
+            case 'f': args->fixedLength = true; break;
             case 'k': args->keepInfo = true; break;
             case 'S': args->sample_include_list = optarg; break;
             case 'O':

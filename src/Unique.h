@@ -14,6 +14,7 @@ template <class HaploType> class Compressor
 
     private:
 
+        bool FIXED_LENGTH;
         int transFactor,cisFactor;
         int numHaplotypes, bufferSize;
         int maxAllele;
@@ -41,30 +42,33 @@ template <class HaploType> class Compressor
     virtual ~Compressor()
     {
     }
- void       CompressChunk       (HaploType & Haplotypes);
+ void       CompressChunk       (HaploType & Haplotypes, bool fixedLength);
  void       Initialize          ();
  void       FlushBlocks         (HaploType & haplotypes);
  void       UpdateDeltaMatrix   (HaploType & haplotypes,int length);
- void       AnalyzeBlocks       (int length);
+    void       AnalyzeBlocks       (int length);
+    void       SimpleAnalyzeBlocks       (int length);
  bool       NewBlockReady       ()
  {
     if(flushMarkerIndex==0) return true;
     return (BlockStartPointer<flushMarkerIndex);
  }
- int        getBlockHeaderEndPosition() {return blockEnd;};
- void       GetM3vcfRecord      (m3vcfRecord &thisM3vcfRecord, HaploType & Haplotypes);
- void       GetBlockHeader      (HaploType & Haplotypes, m3vcfBlock &thisBlock);
- void       CreateBoundaries    (HaploType & Haplotypes);
+    int        getBlockHeaderEndPosition() {return blockEnd;};
+    void       GetM3vcfRecord               (m3vcfRecord &thisM3vcfRecord, HaploType & Haplotypes);
+    void       GetBlockHeader               (HaploType & Haplotypes, m3vcfBlock &thisBlock);
+    void       CreateBoundaries             (HaploType & Haplotypes);
+    void       CreateSimpleBoundaries       (HaploType & Haplotypes);
 
 
 };
 
 
 template <class HaploType> void Compressor<HaploType>::CompressChunk
-                            (HaploType & Haplotypes)
+                            (HaploType & Haplotypes, bool fixedLength)
 {
     numHaplotypes=Haplotypes.size();
     bufferSize=Haplotypes[0].length();
+    FIXED_LENGTH = fixedLength;
     Initialize();
 
     for(int length=1;length<=Haplotypes[0].length();length++)
@@ -83,13 +87,19 @@ template <class HaploType> void Compressor<HaploType>::CompressChunk
         }
 
         UpdateDeltaMatrix(Haplotypes, length);
-        AnalyzeBlocks(length);
+        if(!FIXED_LENGTH)
+            AnalyzeBlocks(length);
+//        else
+//            SimpleAnalyzeBlocks(length);
 
     }
 
     if(Haplotypes[0].length()>1)
     {
-        CreateBoundaries(Haplotypes);
+        if(FIXED_LENGTH)
+            CreateSimpleBoundaries(Haplotypes);
+        else
+            CreateBoundaries(Haplotypes);
     }
     else
     {
@@ -110,6 +120,20 @@ template <class HaploType> void Compressor<HaploType>::CreateBoundaries
         blockBoundaries.push_back(where);
         where = where - bestSlice[where+1]+1;
     };
+    BlockStartPointer=0;
+    flushMarkerIndex=0;
+}
+
+
+template <class HaploType> void Compressor<HaploType>::CreateSimpleBoundaries
+        (HaploType & Haplotypes)
+{
+
+    int where   = Haplotypes[0].length()-1;
+
+    bestIndex[where] = index;
+    blockBoundaries.clear();
+    blockBoundaries.push_back(where);
     BlockStartPointer=0;
     flushMarkerIndex=0;
 }
@@ -162,9 +186,16 @@ template <class HaploType> void Compressor<HaploType>::GetM3vcfRecord
 {
     thisM3vcfRecord.setNumUniqueReps(examplars.size());
     thisM3vcfRecord.initUniqueRepAllele(examplars.size());
+    thisM3vcfRecord.initAltHapIndex();
     for (int j = 0; j < (int)examplars.size(); j++)
     {
         thisM3vcfRecord.assignUniqueRepAllele(j,Haplotypes[examplars[j]][flushMarkerIndex]);
+
+        if(Haplotypes[examplars[j]][flushMarkerIndex]=='1')
+        {
+
+            thisM3vcfRecord.PushThisIndex(j);
+        }
     }
     flushMarkerIndex++;
     return;
@@ -193,19 +224,25 @@ template <class HaploType> void Compressor<HaploType>::AnalyzeBlocks
          {
              cost[length] = currentCost;
              bestSlice[length] = 2;
-             bestComplexity[length] = distinctHaplos;
+//             bestComplexity[length] = distinctHaplos;
          }
       else if (cost[length] > currentCost)
          {
          cost[length] = currentCost;
          bestSlice[length] = i;
-         bestComplexity[length] = distinctHaplos;
+//         bestComplexity[length] = distinctHaplos;
          }
       else if (cost[length] + transFactor * numHaplotypes < currentCost)
          break;
       }
     bestIndex[length-1] = index;
 
+}
+
+template <class HaploType> void Compressor<HaploType>::SimpleAnalyzeBlocks
+        (int length)
+{
+    bestIndex[length-1] = index;
 }
 
 

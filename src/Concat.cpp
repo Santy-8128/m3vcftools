@@ -60,7 +60,7 @@ static void init_data(args_t *args)
 {
     if ( args->phased_concat )
     {
-        args->start_pos.resize(args->nfnames);
+        args->start_pos.resize(args->nfnames,0);
     }
 
     // Gather and Merge Header Information
@@ -70,13 +70,11 @@ static void init_data(args_t *args)
         m3vcfHeader myHeader;
         myHeader.read(m3vcfxStream);
 
-        if(i==0)
-        {
-            if ( !args->out_hdr.checkMergeHeader(myHeader) )
+
+        if (!args->out_hdr.checkMergeHeader(myHeader) )
             error("Different sample information in %s.\n", args->fnames[i]);
         else
             args->out_hdr.mergeHeader(myHeader);
-        }
 
         if ( args->phased_concat )
         {
@@ -91,6 +89,7 @@ static void init_data(args_t *args)
     if (args->record_cmd_line) args->out_hdr.appendMetaLine("m3vcftools_concat");
     args->outFile.open(args->output_fname,args->out_hdr);
 
+    args->outFile.writeHeader(args->out_hdr);
 
     IFILE firstFile = NULL, secondFile = NULL;
     m3vcfBlock firstFileBlock, secondFileBlock;

@@ -38,9 +38,15 @@ public:
     bool writeRecord(m3vcfRecord& record);
 
     /// Write the M3VCF data line to the file.
-    /// \param record record to write to the file.
+    /// \param block block to write to the file.
     /// \return true if successfully wrote, false if not.
     bool writeBlock(m3vcfBlock& block);
+
+
+    /// Write the M3VCF header information line to the file.
+    /// \param header header to write to the file.
+    /// \return true if successfully wrote, false if not.
+    bool writeHeader(m3vcfHeader& header);
 
 protected:
     virtual void resetFile() {}
@@ -75,7 +81,7 @@ template <class HeaderType> bool m3vcfFileWriter<HeaderType>::open(const char* f
         if(!header.write(myFilePtr))
         {
             // Failed, so copy the status.
-            myStatus = header.getStatus();
+           // myStatus = header.getStatus();
             return(false);
         }
     }
@@ -93,6 +99,17 @@ template <class HeaderType> bool m3vcfFileWriter<HeaderType>::open(const char* f
 template <class HeaderType> bool m3vcfFileWriter<HeaderType>::open(const char* filename, HeaderType& header)
 {
     return(open(filename, header, InputFile::UNCOMPRESSED));
+}
+
+
+template <class HeaderType> bool m3vcfFileWriter<HeaderType>::writeHeader(m3vcfHeader& header)
+{
+    if(!header.write(myFilePtr))
+    {
+        myStatus = header.getStatus();
+        return(false);
+    }
+    return(true);
 }
 
 template <class HeaderType> bool m3vcfFileWriter<HeaderType>::writeBlock(m3vcfBlock& block)

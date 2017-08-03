@@ -12,8 +12,10 @@
 #include "m3vcfBlock.h"
 #include "VcfRecordInfo.h"
 #define LENGTH_OF_BLOCK_ID 7
+#define TEMP_SIZE 20
 using namespace std;
 typedef char AlleleType;
+typedef int SampleIndex;
 
 /// This header file provides interface to read/write M3VCF files.
 class m3vcfRecord
@@ -21,7 +23,8 @@ class m3vcfRecord
 
 private:
 
-    static const char ALT_DELIM = ',';
+    string ALT_DELIM;
+    static const char MONOMORPH_INDICATOR='-';
 
     std::string myChrom;
     string BasePosition; int BasePositionVal;
@@ -31,6 +34,8 @@ private:
     vector<string> altAlleleStringArray;
     string infoString;
     vector<AlleleType> UniqueRepAllele;
+    vector<SampleIndex> altHaploIndex;
+    int numAltHaplo;
     int numUniqueReps;
 
 
@@ -122,7 +127,14 @@ public:
         void setInfoString(const char* text) {infoString = text;}
         void setNumUniqueReps(int pos) {numUniqueReps = pos;}
 
+        void PushThisIndex(SampleIndex &thisIndex)
+        {
+            if(numAltHaplo==0 || numAltHaplo>=TEMP_SIZE) altHaploIndex.resize(altHaploIndex.size() + TEMP_SIZE);
+            altHaploIndex[numAltHaplo++] = thisIndex;
+        }
 
+
+        void initAltHapIndex(){numAltHaplo=0; altHaploIndex.clear();}
         void initUniqueRepAllele(int n){UniqueRepAllele.resize(n);return;}
         void assignUniqueRepAllele(int &pos, AlleleType val){UniqueRepAllele[pos]=val;}
 

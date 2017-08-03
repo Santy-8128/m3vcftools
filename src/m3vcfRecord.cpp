@@ -36,6 +36,8 @@ void m3vcfRecord::copyFromVcfRecord(VcfRecord &thisRecord)
 
 m3vcfRecord::m3vcfRecord()
 {
+
+    ALT_DELIM = ",\n";
     reset();
 }
 
@@ -145,20 +147,31 @@ bool m3vcfRecord::read  (IFILE filePtr,
     // Get Unique Representative Alleles
     numUniqueReps=ThisBlock.getNumUniqueReps();
     tempString.clear();
-    if(readTilTab(filePtr, tempString))
+    int PrevIndex = 0;
+
+    while(filePtr->readTilChar(m3vcfRecord::ALT_DELIM, tempString)==0)
     {
-        cout<<" WHOA = "<<tempString<<endl;
-        myStatus.setStatus(StatGenStatus::FAIL_PARSE,
-                           "Error reading M3VCF UNIQUE REP ALLELES");
-        return(false);
+        PrevIndex += atoi(tempString.c_str());
+        PushThisIndex(PrevIndex);
+        tempString.clear();
     }
-    int index = 0;
-    UniqueRepAllele.resize(numUniqueReps,'0');
-    while(index<numUniqueReps)
+
+    if(tempString[0]!=MONOMORPH_INDICATOR)
     {
-        UniqueRepAllele[index]=tempString[index];
-        index++;
+        PrevIndex += atoi(tempString.c_str());
+        PushThisIndex(PrevIndex);
     }
+
+//    int index = 0;
+//    //UniqueRepAllele.resize(numUniqueReps,'0');
+//    while(index<tempString.length())
+//    {
+//        int tempVal=atoi()
+//        PushThisIndex();
+//        UniqueRepAllele[index]=tempString[index];
+//        index++;
+//    }
+
     return(true);
 }
 
@@ -174,7 +187,8 @@ void m3vcfRecord::reset()
     altAlleleStringArray.clear();
     infoString.clear();
     UniqueRepAllele.clear();
-
+    altHaploIndex.clear();
+    numAltHaplo=0;
     BasePositionVal = -2;
     numUniqueReps = 0;
 
@@ -256,10 +270,23 @@ bool m3vcfRecord::write(IFILE filePtr, bool siteOnly)
     }
 
 
-    for(int i=0; i<numUniqueReps; i++)
-    {
-        ifprintf(filePtr, "%c", UniqueRepAllele[i]);
+//    for(int i=0; i<numUniqueReps; i++)
+//    {
+//        if==
+//        ifprintf(filePtr, "%c", UniqueRepAllele[i]);
+//    }
+
+
+    if(numAltHaplo>0) {
+        ifprintf(filePtr, "%d", altHaploIndex[0]);
+        for (int i = 1; i < numAltHaplo; i++) {
+
+            ifprintf(filePtr, ",%d", altHaploIndex[i] - altHaploIndex[i - 1]);
+        }
     }
+    else
+        ifprintf(filePtr, "-");
+
     ifprintf(filePtr, "\n");
 
    return true;
