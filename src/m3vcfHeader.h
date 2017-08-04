@@ -33,15 +33,15 @@ public:
     /// and updates to m3vcf header
     void copyHeader(VcfHeader &thisHeader)
     {
-        myHeaderLinesNew.clear();
-        myHeaderLinesNew.push_back("##fileformat=M3VCFv"+(string)M3VCF_VERSION);
+        myHeaderLines.clear();
+        myHeaderLines.push_back("##fileformat=M3VCFv"+(string)M3VCF_VERSION);
         
-        myHeaderLinesNew.resize(thisHeader.getNumMetaLines()+1);
+        myHeaderLines.resize(thisHeader.getNumMetaLines()+1);
         for(int i=1; i<thisHeader.getNumMetaLines(); i++)
         {
-            myHeaderLinesNew[i]=thisHeader.getMetaLine(i);            
+            myHeaderLines[i]=thisHeader.getMetaLine(i);            
         }
-        myHeaderLinesNew[thisHeader.getNumMetaLines()]=thisHeader.getHeaderLine();             
+        myHeaderLines[thisHeader.getNumMetaLines()]=thisHeader.getHeaderLine();             
     }
     
     
@@ -127,8 +127,7 @@ private:
     bool myHasHeaderLine;
 
     int numSamples;
-    std::vector<String> myHeaderLines;
-    std::vector<string> myHeaderLinesNew;
+    std::vector<string> myHeaderLines;
     std::vector<string> SampleNames;
     std::vector<int> SamplePloidy;
 

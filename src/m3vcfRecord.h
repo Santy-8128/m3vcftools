@@ -113,6 +113,7 @@ public:
 //    //@{
         const char* getChromStr() {return(myChrom.c_str());}
         int getBasePosition() {return(BasePositionVal);}
+        string getBasePositionString() {return(BasePosition);}
         string getVariantID() {return(varID);}
         string getRefAllele() {return(refAlleleString);}
         string getAltAlleleString() {return(allAltAlleleString);}

@@ -87,10 +87,10 @@ bool m3vcfHeader::read(IFILE filePtr)
     while(!myHasHeaderLine)
     {
         // Increase the size of headerlines by 1 to fit the new line.
-        myHeaderLinesNew.resize(myHeaderLinesNew.size() + 1);
+        myHeaderLines.resize(myHeaderLines.size() + 1);
 
         // Read the next line from the file into the header structure.
-        string& newStr = myHeaderLinesNew.back();
+        string& newStr = myHeaderLines.back();
         if(filePtr->readLine(newStr) < 0)
         {
             // Error, unable to read an entire header from the file.
@@ -135,7 +135,6 @@ void m3vcfHeader::reset()
 {
     myHasHeaderLine = false;
     myHeaderLines.clear();
-    myHeaderLinesNew.clear();
     SampleNames.clear();
     SamplePloidy.clear();
     numSamples=0;
@@ -166,8 +165,10 @@ bool m3vcfHeader::write(IFILE filePtr)
         return(false);
     }
 
-    for(std::vector<string>::iterator iter = myHeaderLinesNew.begin();
-        iter != myHeaderLinesNew.end(); iter++)
+
+    int temp2 = myHeaderLines.size();
+    for(std::vector<string>::iterator iter = myHeaderLines.begin();
+        iter != myHeaderLines.end(); iter++)
     {
         ifprintf(filePtr, "%s\n", iter->c_str());
         
@@ -183,7 +184,7 @@ const StatGenStatus& m3vcfHeader::getStatus()
 
 int m3vcfHeader::getNumMetaLines()
 {
-    int numHeaderLines = myHeaderLinesNew.size();
+    int numHeaderLines = myHeaderLines.size();
     if((numHeaderLines >= 1) && (myHasHeaderLine))
     {
         // Remove the header line from the count.
@@ -195,13 +196,13 @@ int m3vcfHeader::getNumMetaLines()
 
 const char* m3vcfHeader::getMetaLine(unsigned int index)
 {
-    if(index >= myHeaderLinesNew.size())
+    if(index >= myHeaderLines.size())
     {
         return(NULL);
     }
     else
     {
-        return(myHeaderLinesNew[index].c_str());
+        return(myHeaderLines[index].c_str());
     }
     return(NULL);
 }
@@ -213,7 +214,7 @@ const char* m3vcfHeader::getHeaderLine()
     syncHeaderLine();
     if(myHasHeaderLine)
     {
-        return(myHeaderLinesNew.back().c_str());
+        return(myHeaderLines.back().c_str());
     }
     return(NULL);
 }
@@ -222,7 +223,7 @@ const char* m3vcfHeader::getHeaderLine()
 
 bool m3vcfHeader::checkMergeHeader(m3vcfHeader &Header)
 {
-    if(myHeaderLinesNew.size()==0) return true;
+    if(myHeaderLines.size()==0) return true;
     if(numSamples!=Header.numSamples) return false;
     for(int i=0;i<numSamples;i++)
     {
@@ -234,25 +235,30 @@ bool m3vcfHeader::checkMergeHeader(m3vcfHeader &Header)
 
 void m3vcfHeader::mergeHeader(m3vcfHeader &Header)
 {
-    if(myHeaderLinesNew.size()==0)
+
+    int temp1 = myHeaderLines.size();
+    if(myHeaderLines.size()==0)
     {
         numSamples=Header.numSamples;
-        myHeaderLinesNew=Header.myHeaderLinesNew;
+        myHeaderLines=Header.myHeaderLines;
         SampleNames=Header.SampleNames;
         SamplePloidy=Header.SamplePloidy;
         myHasHeaderLine=Header.myHasHeaderLine;
     }
     else
     {
-        int numHeaderLines = Header.myHeaderLinesNew.size();
+        int numHeaderLines = Header.myHeaderLines.size();
         for(int i=0; i<numHeaderLines - 1; i++)
         {
-            if(!ifExistsMetaLine(Header.myHeaderLinesNew[i].c_str()))
+            if(!ifExistsMetaLine(Header.myHeaderLines[i].c_str()))
             {
-                appendMetaLine(Header.myHeaderLinesNew[i].c_str());
+                appendMetaLine(Header.myHeaderLines[i].c_str());
             }
         }
     }
+
+    int temp2 = myHeaderLines.size();
+
 }
 
 bool m3vcfHeader::ifExistsMetaLine(const char* metaLine)
@@ -269,10 +275,10 @@ bool m3vcfHeader::ifExistsMetaLine(const char* metaLine)
         return false;
     }
 
-    int numHeaderLines = myHeaderLinesNew.size();
+    int numHeaderLines = myHeaderLines.size();
     for(int i=0; i<numHeaderLines; i++)
     {
-        if(strcmp(metaLine, myHeaderLinesNew[i].c_str()) == 0)
+        if(strcmp(metaLine, myHeaderLines[i].c_str()) == 0)
             return true;
     }
     return false;
@@ -331,15 +337,15 @@ bool m3vcfHeader::appendMetaLine(const char* metaLine)
     if(!myHasHeaderLine)
     {
         // No header line, so just add to the end of the vector.
-        myHeaderLinesNew.push_back(metaLine);
+        myHeaderLines.push_back(metaLine);
         return(true);
     }
     // There is a header line, so insert this just before that line.
     // The headerLine is one position before "end".
-    std::vector<string>::iterator headerLine = myHeaderLinesNew.end();
+    std::vector<string>::iterator headerLine = myHeaderLines.end();
     --headerLine;
     // Insert just before the header line.
-    myHeaderLinesNew.insert(headerLine, metaLine);
+    myHeaderLines.insert(headerLine, metaLine);
     return(true);
 }
 
@@ -356,12 +362,12 @@ bool m3vcfHeader::addHeaderLine(const char* headerLine)
     if(myHasHeaderLine)
     {
         // There is a header line, so replace the current line.
-        myHeaderLinesNew.back() = headerLine;
+        myHeaderLines.back() = headerLine;
     }
     else
     {
         // There is not a header line, so add it
-        myHeaderLinesNew.push_back(headerLine);
+        myHeaderLines.push_back(headerLine);
     }
 
     myHasHeaderLine = true;
@@ -379,7 +385,7 @@ void m3vcfHeader::syncHeaderLine()
         return;
     }
     // Get the last header line and see if it is set.
-    string& hdrLine = myHeaderLinesNew.back();
+    string& hdrLine = myHeaderLines.back();
 
     if(hdrLine.length()==0)
     {

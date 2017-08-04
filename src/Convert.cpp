@@ -19,7 +19,7 @@
 using namespace std;
 
 
-struct args_t
+struct convert_args_t
 {
 
     //VCF File Variables
@@ -36,7 +36,9 @@ struct args_t
     m3vcfBlock myM3vcfBlock;
     bool contiguous, keepInfo;
     int numHaplotypes;
-    
+
+
+
     // Haplotype Data
     vector<string> Haplotypes;int bufferSize;
 
@@ -57,19 +59,24 @@ static void error(const char *format, ...)
     exit(-1);
 }
 
-         
 
 
-static void compress_Data(args_t *args)
+//static void AnalyseHeader(convert_args_t *args)
+//{
+//    args->firstFile = NULL, args->secondFile = NULL;
+//
+//
+//}
+
+static void convert_Data(convert_args_t *args)
 {
-    
-    IFILE firstFile = NULL, secondFile = NULL;
-    m3vcfBlock firstFileBlock, secondFileBlock;
-    m3vcfRecord firstFileRecord, secondFileRecord;
-    m3vcfHeader myHeader;
+//    AnalyseHeader(args);
+
+
+     m3vcfHeader myHeader;
 
     int i=0;
-    firstFile = ifopen(args->fname, "r"); if ( !firstFile ) error("Failed to open: %s\n", args->fname);
+    IFILE firstFile = ifopen(args->fname, "r"); if ( !firstFile ) error("Failed to open: %s\n", args->fname);
     myHeader.read(firstFile);
 ////    args->out_hdr.mergeHeader(myHeader);
 //      
@@ -92,7 +99,7 @@ static void compress_Data(args_t *args)
 }
 
 
-static void usage(args_t *args)
+static void usage(convert_args_t *args)
 {
     fprintf(stderr, "\n");
     fprintf(stderr, " About:   Convert M3VCF file to VCF file  \n");
@@ -115,7 +122,7 @@ static void usage(args_t *args)
 int main_m3vcfconvert(int argc, char *argv[])
 {
     int c;
-    args_t* args = new args_t();
+    convert_args_t* args = new convert_args_t();
     args->argc    = argc; args->argv = argv;
     args->output_fname = "-";
     args->output_type = M3VCF;
@@ -171,7 +178,7 @@ int main_m3vcfconvert(int argc, char *argv[])
         }
         
     }
-    compress_Data(args);
+    convert_Data(args);
     return 0;
 }
 

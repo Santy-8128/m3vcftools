@@ -19,7 +19,7 @@
 using namespace std;
 
 
-struct args_t
+struct compress_args_t
 {
 
     //VCF File Variables
@@ -58,7 +58,7 @@ static void error(const char *format, ...)
     exit(-1);
 }
 
-static void CompressAndFlushChunk(args_t *args)
+static void CompressAndFlushChunk(compress_args_t *args)
 {
     Compressor <vector<string> > ThisChunkCompressor;
     ThisChunkCompressor.CompressChunk(args->Haplotypes, args->fixedLength);
@@ -87,7 +87,7 @@ static void CompressAndFlushChunk(args_t *args)
 }
 
 
-static int getNumHaplotypes(args_t *args)
+static int getNumHaplotypes(compress_args_t *args)
 {
     int Count = 0;
     for (int i = 0; i<(args->myVcfRecord.getNumSamples()); i++) Count+=args->myVcfRecord.getNumGTs(i);
@@ -95,7 +95,7 @@ static int getNumHaplotypes(args_t *args)
 }
 
 
-static void AnalyseHeader(args_t *args)
+static void AnalyseHeader(compress_args_t *args)
 {
     
     if (!args->vcfFile.open(args->fname, args->myVcfHeader))error("Failed to open: %s\n", args->fname);
@@ -107,7 +107,7 @@ static void AnalyseHeader(args_t *args)
 }
 
 
-static void readThisVcfRecord(args_t *args)
+static void readThisVcfRecord(compress_args_t *args)
 {
     int haplotype_index=0;
     for (int i = 0; i<(args->myVcfHeader.getNumSamples()); i++)
@@ -126,7 +126,7 @@ static void readThisVcfRecord(args_t *args)
 }     
         
         
-static void GetNextChunkRead(args_t *args)
+static void GetNextChunkRead(compress_args_t *args)
 {
     
     // If contiguous boundaries are wanted then put the last variant information back
@@ -155,7 +155,7 @@ static void GetNextChunkRead(args_t *args)
 }
 
 
-static void copyVcfRecordToM3vcfRecordList(args_t *args)
+static void copyVcfRecordToM3vcfRecordList(compress_args_t *args)
 {
     args->myM3vcfRecordList[args->Haplotypes[0].length()-1].copyFromVcfRecord(args->myVcfRecord);
     if(!args->keepInfo)
@@ -163,14 +163,14 @@ static void copyVcfRecordToM3vcfRecordList(args_t *args)
 }
 
 
-static void InitializeHaplotypeData(args_t *args)
+static void InitializeHaplotypeData(compress_args_t *args)
 {
     args->numHaplotypes=getNumHaplotypes(args);
     args->Haplotypes.resize(args->numHaplotypes);
 }
            
             
-static void compress_Data(args_t *args)
+static void compress_Data(compress_args_t *args)
 {
 
     // Gather Header Information
@@ -190,7 +190,7 @@ static void compress_Data(args_t *args)
         // Read the Record from VCF File and append into Haplotypes
         readThisVcfRecord(args);
             
-	// Copy variant info from this VcfRecord and store them in the 
+	    // Copy variant info from this VcfRecord and store them in the
         // vector myM3vcfRecordList
         copyVcfRecordToM3vcfRecordList(args);
         
@@ -207,12 +207,12 @@ static void compress_Data(args_t *args)
     if(args->Haplotypes[0].length()>1)
         CompressAndFlushChunk(args);
 
-    args->outFile.close(); 
+    args->outFile.close();
     
 }
 
 
-static void usage(args_t *args)
+static void usage(compress_args_t *args)
 {
     fprintf(stderr, "\n");
     fprintf(stderr, " About:   Compress VCF files to M3VCF files.  \n");
@@ -237,7 +237,7 @@ static void usage(args_t *args)
 int main_m3vcfcompress(int argc, char *argv[])
 {
     int c;
-    args_t* args = new args_t();
+    compress_args_t* args = new compress_args_t();
     args->argc    = argc; args->argv = argv;
     args->fixedLength = false;
     args->output_fname = "-";

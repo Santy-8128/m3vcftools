@@ -20,7 +20,7 @@
 using namespace std;
 
 
-struct args_t
+struct concat_args_t
 {
 //    bcf_srs_t *files;
 //    htsFile *out_fh;
@@ -29,20 +29,25 @@ struct args_t
     m3vcfFileWriter <m3vcfHeader> outFile;
 
 
-//    int *seen_seq;
-//
-//    // phasing
-//    int *start_pos, start_tid, ifname;
-//    int *swap_phase, nswap, *nmatch, *nmism;
-//    bcf1_t **buf;
-//    int nbuf, mbuf, prev_chr, min_PQ, prev_pos_check;
-//    int32_t *GTa, *GTb, mGTa, mGTb, *phase_qual, *phase_set;
-//
+    m3vcfBlock firstFileBlock, secondFileBlock;
+    m3vcfRecord firstFileRecord, secondFileRecord;
+
+    m3vcfHeader myCommonHeader;
+
+    // File Handling Variables
+    IFILE firstFile, secondFile;
+
+
+
+    // Variables for frameworking
     vector<int> start_pos;
+
+
+    //Common File and Argument Variables
     char **argv, **fnames;
-    const char *output_fname, *file_list; //, , , , *remove_dups, *regions_list;
-    int phased_concat, nfnames, argc; //, , allow_overlaps, , regions_is_file;
-//    int compact_PS, phase_set_changed, naive_concat;
+    const char *output_fname, *file_list;
+    int phased_concat, nfnames, argc;
+
 };
 
 
@@ -56,14 +61,21 @@ void error(const char *format, ...)
     exit(-1);
 }
 
-static void init_data(args_t *args)
+static void Initialize(concat_args_t *args)
 {
     if ( args->phased_concat )
     {
         args->start_pos.resize(args->nfnames,0);
     }
+    args->firstFile = NULL, args->secondFile = NULL;
 
+}
+
+
+static void AnalyseHeader(concat_args_t *args)
+{
     // Gather and Merge Header Information
+
     for (int i=0; i<args->nfnames; i++)
     {
         IFILE m3vcfxStream = ifopen(args->fnames[i], "r"); if ( !m3vcfxStream ) error("Failed to open: %s\n", args->fnames[i]);
@@ -78,9 +90,9 @@ static void init_data(args_t *args)
 
         if ( args->phased_concat )
         {
-             m3vcfBlock CurrentBlock;
-             CurrentBlock.read(m3vcfxStream,myHeader,true);
-             args->start_pos[i] = CurrentBlock.getStartBasePosition();
+            m3vcfBlock CurrentBlock;
+            CurrentBlock.read(m3vcfxStream,myHeader,true);
+            args->start_pos[i] = CurrentBlock.getStartBasePosition();
         }
         ifclose(m3vcfxStream);
     }
@@ -88,27 +100,127 @@ static void init_data(args_t *args)
 
     if (args->record_cmd_line) args->out_hdr.appendMetaLine("m3vcftools_concat");
     args->outFile.open(args->output_fname,args->out_hdr);
+}
 
-    args->outFile.writeHeader(args->out_hdr);
 
-    IFILE firstFile = NULL, secondFile = NULL;
-    m3vcfBlock firstFileBlock, secondFileBlock;
-    m3vcfRecord firstFileRecord, secondFileRecord;
-    m3vcfHeader myHeader;
+static void FlushFirstFileNonOverlappingPart(concat_args_t *args)
+{
+    args->firstFile = ifopen(args->fnames[0], "r"); if ( !args->firstFile ) error("Failed to open: %s\n", args->fnames[0]);
+    args->myCommonHeader.read(args->firstFile);
 
-    int i=0;
-    firstFile = ifopen(args->fnames[i], "r"); if ( !firstFile ) error("Failed to open: %s\n", args->fnames[i]);
-    myHeader.read(firstFile);
-
-    while(firstFileBlock.read(firstFile,args->out_hdr) && firstFileBlock.getEndBasePosition()<=args->start_pos[1])
+    while(args->firstFileBlock.read(args->firstFile,args->out_hdr) && args->firstFileBlock.getEndBasePosition()<=args->start_pos[1])
     {
-        args->outFile.writeBlock(firstFileBlock);
-        while(!firstFileBlock.isBlockFinished())
+        args->outFile.writeBlock(args->firstFileBlock);
+        while(!args->firstFileBlock.isBlockFinished())
         {
-//            abort();
-            firstFileRecord.read(firstFile,firstFileBlock);
-            args->outFile.writeRecord(firstFileRecord);
+            args->firstFileRecord.read(args->firstFile,args->firstFileBlock);
+            args->outFile.writeRecord(args->firstFileRecord);
         }
+    }
+
+}
+
+
+static void ConcatenateThisChunkToPrevious(int chunkNo, concat_args_t *args)
+{
+
+    args->outFile.writeBlock(args->firstFileBlock);
+    args->secondFile = ifopen(args->fnames[chunkNo], "r"); if ( !args->secondFile ) error("Failed to open: %s\n", args->fnames[chunkNo]);
+    args->myCommonHeader.read(args->secondFile);
+
+
+    args->secondFileBlock.read(args->secondFile,args->out_hdr);
+
+    args->secondFileRecord.read(args->secondFile,args->secondFileBlock);
+    args->firstFileRecord.read(args->firstFile,args->firstFileBlock);
+    args->outFile.writeRecord(args->firstFileRecord);
+
+    while(!args->firstFileBlock.isBlockFinished() && args->firstFileRecord.getBasePosition() < args->secondFileRecord.getBasePosition())
+    {
+        args->firstFileRecord.read(args->firstFile,args->firstFileBlock);
+        args->outFile.writeRecord(args->firstFileRecord);
+
+    }
+
+    if(args->firstFileRecord.getBasePosition() != args->secondFileRecord.getBasePosition() )
+        error(" Overlapping region for file %s has variant [%s:%s] only in one chunk ", args->fnames[chunkNo],args->firstFileRecord.getChromStr(), args->firstFileRecord.getBasePositionString() );
+
+    if(args->firstFileBlock.isBlockFinished())
+    {
+        if(!args->firstFileBlock.read(args->firstFile,args->out_hdr))
+            error(" Only one variant overlaps between chunk [%s] and [%s] ", args->fnames[chunkNo-1], args->fnames[chunkNo] );
+        else
+            args->outFile.writeBlock(args->firstFileBlock);
+
+    }
+
+    if(args->secondFileBlock.isBlockFinished())
+        if(!args->secondFileBlock.read(args->secondFile,args->out_hdr))
+            error(" Chunk [%s] ends before the chunk preceeding it [%s] ", args->fnames[chunkNo-1], args->fnames[chunkNo] );
+
+    while(!args->firstFileBlock.isBlockFinished() && !args->secondFileBlock.isBlockFinished() )
+    {
+        args->firstFileRecord.read(args->firstFile,args->firstFileBlock);
+        args->firstFileRecord.read(args->firstFile,args->firstFileBlock);
+        args->outFile.writeRecord(args->firstFileRecord);
+        args->secondFileRecord.read(args->secondFile,args->secondFileBlock);
+
+        if(args->firstFileBlock.isBlockFinished())
+        {
+            if(!args->firstFileBlock.read(args->firstFile,args->out_hdr))
+                break;
+            else
+                args->outFile.writeBlock(args->firstFileBlock);
+
+        }
+
+        if(args->secondFileBlock.isBlockFinished())
+            if(!args->secondFileBlock.read(args->secondFile,args->out_hdr))
+                error(" Chunk [%s] ends before the chunk preceeding it [%s] ", args->fnames[chunkNo-1], args->fnames[chunkNo] );
+
+
+    }
+
+
+
+
+
+
+
+
+//    while(args->firstFileBlock.read(args->firstFile,args->out_hdr) && args->firstFileBlock.getEndBasePosition()<=args->start_pos[1])
+//    {
+//        args->outFile.writeBlock(args->firstFileBlock);
+//        while(!args->firstFileBlock.isBlockFinished())
+//        {
+//            args->firstFileRecord.read(args->firstFile,args->firstFileBlock);
+//            args->outFile.writeRecord(args->firstFileRecord);
+//        }
+//    }
+//
+
+}
+
+static void PerformPhasedConcat(concat_args_t *args)
+{
+
+    FlushFirstFileNonOverlappingPart(args);
+
+    for (int i=1; i<args->nfnames; i++)
+    {
+        ConcatenateThisChunkToPrevious(i,args);
+    }
+}
+
+
+static void init_data(concat_args_t *args)
+{
+    Initialize(args);
+    AnalyseHeader(args);
+
+    if(args->phased_concat)
+    {
+        PerformPhasedConcat(args);
     }
 
 
@@ -147,7 +259,7 @@ static void init_data(args_t *args)
 }
 
 
-static void usage(args_t *args)
+static void usage(concat_args_t *args)
 {
     fprintf(stderr, "\n");
     fprintf(stderr, " About:   Concatenate or combine M3VCF files. All source files must have the same sample\n");
@@ -173,7 +285,8 @@ static void usage(args_t *args)
 int main_m3vcfconcat(int argc, char *argv[])
 {
     int c;
-    args_t *args  = (args_t*) calloc(1,sizeof(args_t));
+    concat_args_t* args = new concat_args_t();
+
     args->argc    = argc; args->argv = argv;
     args->output_fname = "-";
     args->output_type = M3VCF;

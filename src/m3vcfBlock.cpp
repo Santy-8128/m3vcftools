@@ -152,6 +152,7 @@ bool m3vcfBlock::read(IFILE filePtr, m3vcfHeader &ThisHeader,
             
         }
     }
+
     return(true);
 }
 
