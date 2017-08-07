@@ -9,7 +9,7 @@
 #include "VcfRecordGenotype.h"
 #include "StatGenStatus.h"
 #include "VcfRecordDiscardRules.h"
-#include "m3vcfBlock.h"
+#include "m3vcfBlockHeader.h"
 #include "VcfRecordInfo.h"
 #define LENGTH_OF_BLOCK_ID 7
 #define TEMP_SIZE 20
@@ -66,7 +66,7 @@ public:
     ///        but NULL if record discarding is not to be done.
     /// \return true if a line was successfully read from the specified filePtr,
     /// false if not.
-    bool read(IFILE filePtr,  m3vcfBlock &ThisBlock,
+    bool read(IFILE filePtr,  m3vcfBlockHeader &ThisBlock,
               bool siteOnly=false,
               VcfRecordDiscardRules* discardRules = NULL,
               VcfSubsetSamples* sampleSubset = NULL);
@@ -95,12 +95,12 @@ public:
 
 
     /// The following two functions copy Start and End position from m3vcfRecord
-    /// to the m3vcfBlock type
-    void copyStartInfotoBlock(m3vcfBlock &thisBlock);
-    void copyEndInfotoBlock(m3vcfBlock &thisBlock);
+    /// to the m3vcfBlockHeader type
+    void copyStartInfotoBlock(m3vcfBlockHeader &thisBlock);
+    void copyEndInfotoBlock(m3vcfBlockHeader &thisBlock);
 
     /// Delete INFO information
-    /// to the m3vcfBlock type
+    /// to the m3vcfBlockHeader type
     void clearInfo(){infoString.clear();}
 
 
@@ -128,6 +128,21 @@ public:
         void setInfoString(const char* text) {infoString = text;}
         void setNumUniqueReps(int pos) {numUniqueReps = pos;}
 
+
+
+        int IsMatching(m3vcfRecord &thisRecord)
+        {
+            if(myChrom != thisRecord.getChromStr()) return 0;
+            if(BasePositionVal != thisRecord.getBasePosition()) return 0;
+            if(refAlleleString != thisRecord.getRefAllele()) return 0;
+            if(allAltAlleleString != thisRecord.getAltAlleleString()) return 0;
+            return 1;
+        }
+
+        string PrintVariant()
+        {
+            return myChrom+":"+BasePosition+":"+refAlleleString+":"+allAltAlleleString;
+        }
         void PushThisIndex(SampleIndex &thisIndex)
         {
             if(numAltHaplo==0 || numAltHaplo>=TEMP_SIZE) altHaploIndex.resize(altHaploIndex.size() + TEMP_SIZE);

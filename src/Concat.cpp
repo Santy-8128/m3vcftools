@@ -8,8 +8,10 @@
 #include <math.h>
 #include <iostream>
 #include "m3vcfHeader.h"
-#include "m3vcfBlock.h"
+#include "m3vcfBlockHeader.h"
 #include "m3vcfFileWriter.h"
+#include "m3vcfBlock.h"
+#define MAX_BASE_POSITION 999999999
 #define VCF 2
 #define ZIPVCF 1
 #define M3VCF 4
@@ -29,10 +31,11 @@ struct concat_args_t
     m3vcfFileWriter <m3vcfHeader> outFile;
 
 
-    m3vcfBlock firstFileBlock, secondFileBlock;
+    m3vcfBlockHeader firstFileBlockHeader, secondFileBlockHeader;
     m3vcfRecord firstFileRecord, secondFileRecord;
-
     m3vcfHeader myCommonHeader;
+    vector<m3vcfBlock*> FirstFileBlocks, SecondFileBlocks;
+
 
     // File Handling Variables
     IFILE firstFile, secondFile;
@@ -65,7 +68,7 @@ static void Initialize(concat_args_t *args)
 {
     if ( args->phased_concat )
     {
-        args->start_pos.resize(args->nfnames,0);
+        args->start_pos.resize(args->nfnames+1,0);
     }
     args->firstFile = NULL, args->secondFile = NULL;
 
@@ -75,8 +78,8 @@ static void Initialize(concat_args_t *args)
 static void AnalyseHeader(concat_args_t *args)
 {
     // Gather and Merge Header Information
-
-    for (int i=0; i<args->nfnames; i++)
+    int i;
+    for (i=0; i<args->nfnames; i++)
     {
         IFILE m3vcfxStream = ifopen(args->fnames[i], "r"); if ( !m3vcfxStream ) error("Failed to open: %s\n", args->fnames[i]);
         m3vcfHeader myHeader;
@@ -90,13 +93,13 @@ static void AnalyseHeader(concat_args_t *args)
 
         if ( args->phased_concat )
         {
-            m3vcfBlock CurrentBlock;
+            m3vcfBlockHeader CurrentBlock;
             CurrentBlock.read(m3vcfxStream,myHeader,true);
             args->start_pos[i] = CurrentBlock.getStartBasePosition();
         }
         ifclose(m3vcfxStream);
     }
-
+    args->start_pos[i]=MAX_BASE_POSITION;
 
     if (args->record_cmd_line) args->out_hdr.appendMetaLine("m3vcftools_concat");
     args->outFile.open(args->output_fname,args->out_hdr);
@@ -108,12 +111,12 @@ static void FlushFirstFileNonOverlappingPart(concat_args_t *args)
     args->firstFile = ifopen(args->fnames[0], "r"); if ( !args->firstFile ) error("Failed to open: %s\n", args->fnames[0]);
     args->myCommonHeader.read(args->firstFile);
 
-    while(args->firstFileBlock.read(args->firstFile,args->out_hdr) && args->firstFileBlock.getEndBasePosition()<=args->start_pos[1])
+    while(args->firstFileBlockHeader.read(args->firstFile,args->out_hdr) && args->firstFileBlockHeader.getEndBasePosition()<=args->start_pos[1])
     {
-        args->outFile.writeBlock(args->firstFileBlock);
-        while(!args->firstFileBlock.isBlockFinished())
+        args->outFile.writeBlock(args->firstFileBlockHeader);
+        while(!args->firstFileBlockHeader.isBlockFinished())
         {
-            args->firstFileRecord.read(args->firstFile,args->firstFileBlock);
+            args->firstFileRecord.read(args->firstFile,args->firstFileBlockHeader);
             args->outFile.writeRecord(args->firstFileRecord);
         }
     }
@@ -121,79 +124,241 @@ static void FlushFirstFileNonOverlappingPart(concat_args_t *args)
 }
 
 
-static void ConcatenateThisChunkToPrevious(int chunkNo, concat_args_t *args)
+static void FlushFirstFileBlockNonOverlappingPart(int chunkNo, concat_args_t *args)
 {
-
-    args->outFile.writeBlock(args->firstFileBlock);
-    args->secondFile = ifopen(args->fnames[chunkNo], "r"); if ( !args->secondFile ) error("Failed to open: %s\n", args->fnames[chunkNo]);
-    args->myCommonHeader.read(args->secondFile);
-
-
-    args->secondFileBlock.read(args->secondFile,args->out_hdr);
-
-    args->secondFileRecord.read(args->secondFile,args->secondFileBlock);
-    args->firstFileRecord.read(args->firstFile,args->firstFileBlock);
+    args->outFile.writeBlock(args->firstFileBlockHeader);
+    args->firstFileRecord.read(args->firstFile,args->firstFileBlockHeader);
     args->outFile.writeRecord(args->firstFileRecord);
 
-    while(!args->firstFileBlock.isBlockFinished() && args->firstFileRecord.getBasePosition() < args->secondFileRecord.getBasePosition())
+    while(!args->firstFileBlockHeader.isBlockFinished() && args->firstFileRecord.getBasePosition() < args->secondFileRecord.getBasePosition())
     {
-        args->firstFileRecord.read(args->firstFile,args->firstFileBlock);
+        args->firstFileRecord.read(args->firstFile,args->firstFileBlockHeader);
         args->outFile.writeRecord(args->firstFileRecord);
 
     }
 
-    if(args->firstFileRecord.getBasePosition() != args->secondFileRecord.getBasePosition() )
-        error(" Overlapping region for file %s has variant [%s:%s] only in one chunk ", args->fnames[chunkNo],args->firstFileRecord.getChromStr(), args->firstFileRecord.getBasePositionString() );
+    if(args->firstFileRecord.IsMatching(args->secondFileRecord) == 0)
+        error("[ERROR:] Variant [%s] present only in one chunk [%s]\n", args->firstFileRecord.PrintVariant().c_str(),args->fnames[chunkNo]);
 
-    if(args->firstFileBlock.isBlockFinished())
+}
+
+
+
+static void InitSecondFile(int chunkNo, concat_args_t *args)
+{
+    args->secondFile = ifopen(args->fnames[chunkNo], "r"); if ( !args->secondFile ) error("Failed to open: %s\n", args->fnames[chunkNo]);
+    args->myCommonHeader.read(args->secondFile);
+}
+
+
+
+static void CheckIfOverlaps(int chunkNo, concat_args_t *args)
+{
+    if(args->firstFileBlockHeader.isBlockFinished())
     {
-        if(!args->firstFileBlock.read(args->firstFile,args->out_hdr))
-            error(" Only one variant overlaps between chunk [%s] and [%s] ", args->fnames[chunkNo-1], args->fnames[chunkNo] );
+        if(!args->firstFileBlockHeader.read(args->firstFile,args->out_hdr))
+            error("[ERROR:] Only one variant overlaps between chunk [%s] and [%s]\n", args->fnames[chunkNo-1], args->fnames[chunkNo] );
         else
-            args->outFile.writeBlock(args->firstFileBlock);
-
+            args->outFile.writeBlock(args->firstFileBlockHeader);
     }
 
-    if(args->secondFileBlock.isBlockFinished())
-        if(!args->secondFileBlock.read(args->secondFile,args->out_hdr))
-            error(" Chunk [%s] ends before the chunk preceeding it [%s] ", args->fnames[chunkNo-1], args->fnames[chunkNo] );
+    if(args->secondFileBlockHeader.isBlockFinished())
+        if(!args->secondFileBlockHeader.read(args->secondFile,args->out_hdr))
+            error("[ERROR:] No overlap between chunk [%s] and [%s]\n", args->fnames[chunkNo-1], args->fnames[chunkNo] );
 
-    while(!args->firstFileBlock.isBlockFinished() && !args->secondFileBlock.isBlockFinished() )
+}
+
+static void ReadOverlappingRegion(int chunkNo, concat_args_t *args)
+{
+    while(!args->firstFileBlockHeader.isBlockFinished() && !args->secondFileBlockHeader.isBlockFinished() )
     {
-        args->firstFileRecord.read(args->firstFile,args->firstFileBlock);
-        args->firstFileRecord.read(args->firstFile,args->firstFileBlock);
+        args->firstFileRecord.read(args->firstFile,args->firstFileBlockHeader);
         args->outFile.writeRecord(args->firstFileRecord);
-        args->secondFileRecord.read(args->secondFile,args->secondFileBlock);
+        args->secondFileRecord.read(args->secondFile,args->secondFileBlockHeader);
 
-        if(args->firstFileBlock.isBlockFinished())
+        if(args->firstFileBlockHeader.isBlockFinished())
         {
-            if(!args->firstFileBlock.read(args->firstFile,args->out_hdr))
+            if(!args->firstFileBlockHeader.read(args->firstFile,args->out_hdr))
                 break;
             else
-                args->outFile.writeBlock(args->firstFileBlock);
-
+                args->outFile.writeBlock(args->firstFileBlockHeader);
         }
 
-        if(args->secondFileBlock.isBlockFinished())
-            if(!args->secondFileBlock.read(args->secondFile,args->out_hdr))
-                error(" Chunk [%s] ends before the chunk preceeding it [%s] ", args->fnames[chunkNo-1], args->fnames[chunkNo] );
+        if(args->secondFileBlockHeader.isBlockFinished())
+            if(!args->secondFileBlockHeader.read(args->secondFile,args->out_hdr))
+                error("[ERROR:] Chunk [%s] ends before the chunk preceding it [%s] ", args->fnames[chunkNo-1], args->fnames[chunkNo] );
+    }
+}
 
+
+static void SaveFirstFileOverlappingRegion(int chunkNo, concat_args_t *args)
+{
+    args->FirstFileBlocks.clear();
+    args->FirstFileBlocks.resize(1);
+    args->FirstFileBlocks[0]=new m3vcfBlock;
+    args->FirstFileBlocks[0]->CopyBlockHeader(args->firstFileBlockHeader);
+
+    do
+    {
+        while(!args->FirstFileBlocks.back()->isBlockFinished())
+        {
+            (args->FirstFileBlocks.back())->readRecord(args->firstFile);
+        }
+
+        args->FirstFileBlocks.resize(args->FirstFileBlocks.size()+1);
+        args->FirstFileBlocks.back()=new m3vcfBlock;
+    }while((args->FirstFileBlocks.back()->readHeader(args->firstFile,args->out_hdr)));
+
+    args->FirstFileBlocks.pop_back();
+    ifclose(args->firstFile);
+}
+
+
+
+static void SaveSecondFileOverlappingRegion(int chunkNo, concat_args_t *args)
+{
+
+    int PrevLastPosition = args->FirstFileBlocks.back()->getEndBasePosition();
+
+    InitSecondFile(chunkNo, args);
+
+    args->SecondFileBlocks.clear();
+    args->SecondFileBlocks.resize(1);
+    args->SecondFileBlocks[0]=new m3vcfBlock;
+
+
+    while((args->SecondFileBlocks.back()->readHeader(args->secondFile,args->out_hdr))
+          && args->SecondFileBlocks.back()->getStartBasePosition()<PrevLastPosition)
+    {
+        while(!args->SecondFileBlocks.back()->isBlockFinished())
+        {
+            (args->SecondFileBlocks.back())->readRecord(args->secondFile);
+        }
+
+        args->SecondFileBlocks.resize(args->SecondFileBlocks.size()+1);
+        args->SecondFileBlocks.back()=new m3vcfBlock;
+    }
+
+
+}
+
+static void FlushSecondFileBlockNonOverlappingPart(int chunkNo, concat_args_t *args)
+{
+    args->SecondFileBlocks.back()->CopyToBlockHeader(args->secondFileBlockHeader);
+
+    do
+    {
+        args->outFile.writeBlock(args->secondFileBlockHeader);
+        while(!args->secondFileBlockHeader.isBlockFinished())
+        {
+            args->secondFileRecord.read(args->secondFile,args->secondFileBlockHeader);
+            args->outFile.writeRecord(args->secondFileRecord);
+        }
+    }
+    while((args->secondFileBlockHeader.read(args->secondFile,args->out_hdr))
+          && args->secondFileBlockHeader.getEndBasePosition()<=args->start_pos[chunkNo+1]);
+
+
+}
+
+
+static void FlushOverlappingPart(int chunkNo, concat_args_t *args)
+{
+    int FirstBlockHeaderIndex=0, FirstRecordIndex=0;
+
+    while(args->FirstFileBlocks[0]->getM3vcfRecord(FirstRecordIndex)->getBasePosition() < args->start_pos[chunkNo]) {FirstRecordIndex++;}
+
+
+    for(int i=0; i<(int)args->SecondFileBlocks.size()-1; i++)
+    {
+
+        for(int j=0; j< args->SecondFileBlocks[i]->getNumMarkers(); j++)
+        {
+
+            if(args->SecondFileBlocks[i]->getM3vcfRecord(j)->IsMatching(*args->FirstFileBlocks[FirstBlockHeaderIndex]->getM3vcfRecord(FirstRecordIndex))!=1)
+                error("[ERROR:] Variant [%s] present only in one chunk [%s]\n",
+                      args->SecondFileBlocks[i]->getM3vcfRecord(j)->getVariantID().c_str(),
+                      args->fnames[chunkNo-1]);
+
+            FirstRecordIndex++;
+            if(FirstRecordIndex>=args->FirstFileBlocks[FirstBlockHeaderIndex]->getNumMarkers())
+            {
+                if(FirstBlockHeaderIndex==args->FirstFileBlocks.size()-1) break;
+                FirstRecordIndex=0;
+                FirstBlockHeaderIndex++;
+                j--;
+            }
+
+            int pp=1;
+        }
+        FirstRecordIndex--;
 
     }
 
 
 
+    int h=1;
+}
+
+static void ConcatenateThisChunkToPrevious(int chunkNo, concat_args_t *args)
+{
+    // Read the overlapping part from first file
+    SaveFirstFileOverlappingRegion(chunkNo, args);
+
+    // Read the overlapping part from second file
+    SaveSecondFileOverlappingRegion(chunkNo, args);
 
 
+    //Flush Overlapping Part
+    FlushOverlappingPart(chunkNo, args);
 
 
+    //Flush Remaining non-overlapping part of second file
+    FlushSecondFileBlockNonOverlappingPart(chunkNo, args);
 
-//    while(args->firstFileBlock.read(args->firstFile,args->out_hdr) && args->firstFileBlock.getEndBasePosition()<=args->start_pos[1])
+    args->firstFileBlockHeader=args->secondFileBlockHeader;
+    args->firstFile=args->secondFile;
+
+    // Open and Initialize the Second File and read Second Block and Record
+
+
+//    InitSecondFile(chunkNo, args);
+//
+//    // First Flush the First File Block until common marker
+//    FlushFirstFileBlockNonOverlappingPart(chunkNo, args);
+//
+//    // Check Overlap Eligibility
+//    CheckIfOverlaps(chunkNo, args);
+//
+//    // Once Overlaps are verified, read both blocks and records together till first file ends
+//    // Throw error if first file ends before second file
+//    ReadOverlappingRegion(chunkNo, args);
+//
+
+    // Next, read the second file, till the start of the next file
+//    do
 //    {
-//        args->outFile.writeBlock(args->firstFileBlock);
-//        while(!args->firstFileBlock.isBlockFinished())
+//        args->outFile.writeBlock(args->secondFileBlockHeader);
+//        while(!args->secondFileBlockHeader.isBlockFinished())
 //        {
-//            args->firstFileRecord.read(args->firstFile,args->firstFileBlock);
+//            args->secondFileRecord.read(args->secondFile,args->secondFileBlockHeader);
+//            args->outFile.writeRecord(args->secondFileRecord);
+//        }
+//    }while(args->secondFileBlockHeader.read(args->secondFile,args->out_hdr)
+//           && args->secondFileBlockHeader.getEndBasePosition()<=args->start_pos[chunkNo+1]);
+//
+
+
+
+
+
+
+//    while(args->firstFileBlockHeader.read(args->firstFile,args->out_hdr) && args->firstFileBlockHeader.getEndBasePosition()<=args->start_pos[1])
+//    {
+//        args->outFile.writeBlock(args->firstFileBlockHeader);
+//        while(!args->firstFileBlockHeader.isBlockFinished())
+//        {
+//            args->firstFileRecord.read(args->firstFile,args->firstFileBlockHeader);
 //            args->outFile.writeRecord(args->firstFileRecord);
 //        }
 //    }
@@ -229,16 +394,16 @@ static void init_data(concat_args_t *args)
 //    CurrentBlock.write()
 //
 //
-//       m3vcfBlock CurrentBlock;
+//       m3vcfBlockHeader CurrentBlock;
 //             CurrentBlock.read(m3vcfxStream,myHeader,true);
-//       m3vcfBlock CurrentBlock;
+//       m3vcfBlockHeader CurrentBlock;
 //             CurrentBlock.read(m3vcfxStream,myHeader,true);
 
 
 //    IFILE m3vcfxStream = ifopen(args->fnames[0], "r");
 //
 //    m3vcfHeader myHeader;
-//    m3vcfBlock CurrentBlock;
+//    m3vcfBlockHeader CurrentBlock;
 //
 //    myHeader.read(m3vcfxStream);
 //    while(CurrentBlock.read(m3vcfxStream,myHeader))

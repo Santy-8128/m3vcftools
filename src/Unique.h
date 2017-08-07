@@ -6,7 +6,7 @@
 #include<vector>
 #include "assert.h"
 #include "m3vcfRecord.h"
-#include "m3vcfBlock.h"
+#include "m3vcfBlockHeader.h"
 using namespace std;
 
 template <class HaploType> class Compressor
@@ -55,7 +55,7 @@ template <class HaploType> class Compressor
  }
     int        getBlockHeaderEndPosition() {return blockEnd;};
     void       GetM3vcfRecord               (m3vcfRecord &thisM3vcfRecord, HaploType & Haplotypes);
-    void       GetBlockHeader               (HaploType & Haplotypes, m3vcfBlock &thisBlock);
+    void       GetBlockHeader               (HaploType & Haplotypes, m3vcfBlockHeader &thisBlock);
     void       CreateBoundaries             (HaploType & Haplotypes);
     void       CreateSimpleBoundaries       (HaploType & Haplotypes);
 
@@ -140,7 +140,7 @@ template <class HaploType> void Compressor<HaploType>::CreateSimpleBoundaries
 
 template <class HaploType> void Compressor<HaploType>::GetBlockHeader
                             (HaploType & Haplotypes,
-                             m3vcfBlock &thisBlock)
+                             m3vcfBlockHeader &thisBlock)
 {
     blockEnd = blockBoundaries.back();
     blockBoundaries.pop_back();

@@ -9,7 +9,7 @@
 #include <iostream>
 #include "VcfFileReader.h"
 #include "m3vcfHeader.h"
-#include "m3vcfBlock.h"
+#include "m3vcfBlockHeader.h"
 #include "m3vcfFileWriter.h"
 #include "Unique.h"
 #define VCF 2
@@ -33,7 +33,7 @@ struct convert_args_t
     m3vcfHeader out_hdr;
     m3vcfFileWriter <m3vcfHeader> outFile;
     vector<m3vcfRecord> myM3vcfRecordList;
-    m3vcfBlock myM3vcfBlock;
+    m3vcfBlockHeader myM3vcfBlockHeader;
     bool contiguous, keepInfo;
     int numHaplotypes;
 

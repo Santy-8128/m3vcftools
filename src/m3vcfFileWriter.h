@@ -3,7 +3,7 @@
 #define __M3VCF_FILE_WRITER_H__
 
 #include "m3vcfFile.h"
-#include "m3vcfBlock.h"
+#include "m3vcfBlockHeader.h"
 #include "m3vcfRecord.h"
 
 /// This header file provides interface to write M3VCF files.
@@ -40,7 +40,7 @@ public:
     /// Write the M3VCF data line to the file.
     /// \param block block to write to the file.
     /// \return true if successfully wrote, false if not.
-    bool writeBlock(m3vcfBlock& block);
+    bool writeBlock(m3vcfBlockHeader& block);
 
 
     /// Write the M3VCF header information line to the file.
@@ -112,7 +112,7 @@ template <class HeaderType> bool m3vcfFileWriter<HeaderType>::writeHeader(m3vcfH
     return(true);
 }
 
-template <class HeaderType> bool m3vcfFileWriter<HeaderType>::writeBlock(m3vcfBlock& block)
+template <class HeaderType> bool m3vcfFileWriter<HeaderType>::writeBlock(m3vcfBlockHeader& block)
 {
     if(!block.write(myFilePtr, mySiteOnly))
     {

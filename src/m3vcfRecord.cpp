@@ -1,13 +1,13 @@
 #include "m3vcfRecord.h"
 
-void m3vcfRecord::copyStartInfotoBlock(m3vcfBlock &thisBlock)
+void m3vcfRecord::copyStartInfotoBlock(m3vcfBlockHeader &thisBlock)
 {
     thisBlock.setChrom(myChrom);
     thisBlock.setStartBasePosition(BasePositionVal);
 }
 
 
-void m3vcfRecord::copyEndInfotoBlock(m3vcfBlock &thisBlock)
+void m3vcfRecord::copyEndInfotoBlock(m3vcfBlockHeader &thisBlock)
 {
     thisBlock.setEndBasePosition(BasePositionVal);
 }
@@ -48,7 +48,7 @@ m3vcfRecord::~m3vcfRecord()
 
 
 bool m3vcfRecord::read  (IFILE filePtr,
-                          m3vcfBlock &ThisBlock,
+                          m3vcfBlockHeader &ThisBlock,
                         bool siteOnly,
                         VcfRecordDiscardRules* discardRules,
                         VcfSubsetSamples* sampleSubset)
