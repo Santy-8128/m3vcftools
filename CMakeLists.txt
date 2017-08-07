@@ -19,7 +19,7 @@ add_executable(m3vcftools
   src/Concat.cpp
   src/Compress.cpp
   src/Convert.cpp
-  src/m3vcfBlock.cpp
+  src/m3vcfBlockHeader.cpp
   src/m3vcfFile.cpp
   src/m3vcfFileWriter.cpp
   src/m3vcfFileReader.cpp
@@ -27,7 +27,7 @@ add_executable(m3vcftools
   src/m3vcfRecord.cpp
   src/Main.cpp
   src/Tokenize.cpp
-  src/Unique.cpp)
+  src/Unique.cpp src/m3vcfBlock.cpp src/m3vcfBlock.h)
 
 target_link_libraries(m3vcftools ${STATGEN_LIBRARY} ${ZLIB_LIBRARIES})
 
