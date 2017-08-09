@@ -138,8 +138,11 @@ public:
         const char* getChromStr() {return(myChrom.c_str());}
         int getStartBasePosition() {return(startPosition);}
         int getEndBasePosition() {return(endPosition);}
+        int getNumSamples() {return(numSamples);}
+        int getSamplePloidy(int index) {return(SampleNoHaplotypes[index]);}
         int getNumMarkers() {return(numMarkers);}
         int getNumUniqueReps() {return(numUniqueReps);}
+        int getUniqueIndexMap(int index) {return(UniqueIndexMap[index]);}
 
         void initUniqueIndexMap(int n){UniqueIndexMap.resize(n);return;}
         void assignUniqueIndexMap(int &pos, int val){UniqueIndexMap[pos]=val;}

@@ -8,10 +8,12 @@
 #include <math.h>
 #include <iostream>
 #include "VcfFileReader.h"
+#include "VcfFileWriter.h"
 #include "m3vcfHeader.h"
 #include "m3vcfBlockHeader.h"
 #include "m3vcfFileWriter.h"
 #include "Unique.h"
+#include "m3vcfBlock.h"
 #define VCF 2
 #define ZIPVCF 1
 #define M3VCF 4
@@ -23,14 +25,16 @@ struct convert_args_t
 {
 
     //VCF File Variables
-    VcfFileReader vcfFile;
+    IFILE vcfFileStream;
+    VcfFileWriter vcfFile;
     VcfHeader myVcfHeader;
     VcfRecord myVcfRecord;
     VcfSubsetSamples MySubsetSamples;
 
     // M3VCF File Variables
-
+    IFILE m3vcfFileStream;
     m3vcfHeader out_hdr;
+    m3vcfBlock myM3vcfBlock;
     m3vcfFileWriter <m3vcfHeader> outFile;
     vector<m3vcfRecord> myM3vcfRecordList;
     m3vcfBlockHeader myM3vcfBlockHeader;
@@ -61,12 +65,19 @@ static void error(const char *format, ...)
 
 
 
-//static void AnalyseHeader(convert_args_t *args)
-//{
-//    args->firstFile = NULL, args->secondFile = NULL;
-//
-//
-//}
+static void CopyandPrintHeader(convert_args_t *args)
+{
+     args->myVcfHeader.reset();
+     
+     for(int i=1; i<args->out_hdr.getNumMetaLines(); i++)
+     {
+         args->myVcfHeader.appendMetaLine(args->out_hdr.getMetaLine(i));
+     }
+     
+     args->myVcfHeader.addHeaderLine(args->out_hdr.getHeaderLine());
+  
+    args->myVcfHeader.write(args->vcfFileStream);
+}
 
 static void convert_Data(convert_args_t *args)
 {
@@ -74,13 +85,49 @@ static void convert_Data(convert_args_t *args)
 
 
      m3vcfHeader myHeader;
-
+     
+//     while(!args->)
+     
     int i=0;
-    IFILE firstFile = ifopen(args->fname, "r"); if ( !firstFile ) error("Failed to open: %s\n", args->fname);
-    myHeader.read(firstFile);
+    args->vcfFileStream = ifopen(args->output_fname, "w", args->output_type==2? InputFile::UNCOMPRESSED : InputFile::GZIP);
+    
+    args->m3vcfFileStream = ifopen(args->fname, "r"); if ( !args->m3vcfFileStream ) error("Failed to open: %s\n", args->fname);
+    args->out_hdr.read(args->m3vcfFileStream);
+    
+    
+    CopyandPrintHeader(args);
+   
+    int FirstBlock=0;
+    while(args->myM3vcfBlock.read(args->m3vcfFileStream, args->out_hdr))
+    {
+  
+        for(int i=FirstBlock++==0?0:1; i<args->myM3vcfBlock.getNumMarkers(); i++)
+        {
+//            args->myM3vcfBlock.copyRecord(i, args->myVcfRecord);
+           // args->myVcfRecord.write(args->vcfFileStream, true);
+            args->myM3vcfBlock.writeVcfRecordGenotypes(args->vcfFileStream, i);
+        }
+    }
+    
+ 
+//    while(args->firstFileBlockHeader.read(args->firstFile,args->out_hdr) && args->firstFileBlockHeader.getEndBasePosition()<=args->start_pos[1])
+//    {
+//        args->outFile.writeBlock(args->firstFileBlockHeader);
+//        while(!args->firstFileBlockHeader.isBlockFinished())
+//        {
+//            args->firstFileRecord.read(args->firstFile,args->firstFileBlockHeader);
+//            args->outFile.writeRecord(args->firstFileRecord);
+//        }
+//    }
+    
+    
+    ifclose(args->vcfFileStream);
+    
+    
+
+    
 ////    args->out_hdr.mergeHeader(myHeader);
 //      
-    args->outFile.open(args->output_fname,args->out_hdr);
 
 //    args->outFile.open(args->output_fname, args->out_hdr, args->output_type==4? InputFile::UNCOMPRESSED : InputFile::GZIP); 
 //    while(firstFileBlock.read(firstFile,myHeader))
@@ -125,7 +172,7 @@ int main_m3vcfconvert(int argc, char *argv[])
     convert_args_t* args = new convert_args_t();
     args->argc    = argc; args->argv = argv;
     args->output_fname = "-";
-    args->output_type = M3VCF;
+    args->output_type = VCF;
     args->bufferSize = 1000;
     args->record_cmd_line = 1;
     args->keepInfo = false;
@@ -149,8 +196,8 @@ int main_m3vcfconvert(int argc, char *argv[])
             case 'S': args->sample_include_list = optarg; break;
             case 'O':
                 switch (optarg[0]) {
-                    case 'm': args->output_type = ZIPM3VCF; break;
-                    case 'M': args->output_type = M3VCF; break;
+                    case 'z': args->output_type = ZIPVCF; break;
+                    case 'Z': args->output_type = VCF; break;
                     default: error("The output type \"%s\" not recognised\n", optarg);
                 };
                 break;

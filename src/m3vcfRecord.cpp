@@ -20,6 +20,9 @@ void m3vcfRecord::copyFromVcfRecord(VcfRecord &thisRecord)
     varID = thisRecord.getIDStr();
     refAlleleString = thisRecord.getRefStr();
     allAltAlleleString = thisRecord.getAltStr();
+    filterString = thisRecord.getFilter().getString();
+    qualityString = thisRecord.getQualStr();
+   
     infoString.clear();
     for (int i = 0; i < thisRecord.getInfo().getNumInfoFields(); ++i)
     {
@@ -46,6 +49,19 @@ m3vcfRecord::~m3vcfRecord()
 {
 }
 
+
+bool m3vcfRecord::copyRecord(VcfRecord &thisRecord)
+{
+    thisRecord.reset();
+    
+    thisRecord.setChrom(myChrom.c_str());
+    thisRecord.set1BasedPosition(BasePositionVal);
+    thisRecord.setID(varID.c_str());
+    thisRecord.setRef(refAlleleString.c_str());
+    thisRecord.setAlt(allAltAlleleString.c_str()); 
+    
+    return true;
+}
 
 bool m3vcfRecord::read  (IFILE filePtr,
                           m3vcfBlockHeader &ThisBlock,
@@ -122,9 +138,20 @@ bool m3vcfRecord::read  (IFILE filePtr,
                            "Error reading M3VCF Record ALT.");
         return(false);
     }
-
-    readTilTab(filePtr, tempString);
-    readTilTab(filePtr, tempString);
+    
+    if(!readTilTab(filePtr, qualityString))
+    {
+        myStatus.setStatus(StatGenStatus::FAIL_PARSE,
+                           "Error reading M3VCF Record QUAL.");
+        return(false);
+    }
+    
+    if(!readTilTab(filePtr, filterString))
+    {
+        myStatus.setStatus(StatGenStatus::FAIL_PARSE,
+                           "Error reading M3VCF Record FILTER.");
+        return(false);
+    }
 
     // Read the Info String.
     if(!readTilTab(filePtr, infoString))
@@ -186,12 +213,16 @@ void m3vcfRecord::reset()
     allAltAlleleString.clear();
     altAlleleStringArray.clear();
     infoString.clear();
+    qualityString.clear();
+    filterString.clear();
     UniqueRepAllele.clear();
     altHaploIndex.clear();
     numAltHaplo=0;
     BasePositionVal = -2;
     numUniqueReps = 0;
 
+
+    
     myStatus = StatGenStatus::SUCCESS;
 }
 
@@ -256,10 +287,27 @@ bool m3vcfRecord::write(IFILE filePtr, bool siteOnly)
         ifprintf(filePtr, "%s\t", allAltAlleleString.c_str());
     }
 
-    ifprintf(filePtr, ".\t");
-    ifprintf(filePtr, ".\t");
+    
+    if(qualityString.length() == 0)
+    {
+        ifprintf(filePtr, ".\t");
+    }
+    else
+    {
+        ifprintf(filePtr, "%s\t", qualityString.c_str());
+    }
 
+    
+    if(filterString.length() == 0)
+    {
+        ifprintf(filePtr, ".\t");
+    }
+    else
+    {
+        ifprintf(filePtr, "%s\t", filterString.c_str());
+    }
 
+    
     if(infoString.length() == 0)
     {
         ifprintf(filePtr, ".\t");
@@ -269,7 +317,10 @@ bool m3vcfRecord::write(IFILE filePtr, bool siteOnly)
         ifprintf(filePtr, "%s\t", infoString.c_str());
     }
 
-
+    if(siteOnly)
+        return true;
+    
+    
 //    for(int i=0; i<numUniqueReps; i++)
 //    {
 //        if==

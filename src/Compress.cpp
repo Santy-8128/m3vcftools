@@ -110,12 +110,12 @@ static void AnalyseHeader(compress_args_t &args)
 static void readThisVcfRecord(compress_args_t &args)
 {
     int haplotype_index=0;
-    cout<< endl<<" WHAT = "<<args.myVcfHeader.getNumSamples()<<endl;
+//    cout<< endl<<" WHAT = "<<args.myVcfHeader.getNumSamples()<<endl;
     for (int i = 0; i<(args.myVcfHeader.getNumSamples()); i++)
     {
         for (int j = 0; j<args.myVcfRecord.getNumGTs(i); j++)
         {
-            cout<<args.ThisIsTheFirstMarker<<"\t"<<args.Haplotypes[0].length()<<"\t"<<args.myVcfRecord.get1BasedPosition()<<endl;
+//            cout<<args.ThisIsTheFirstMarker<<"\t"<<args.Haplotypes[0].length()<<"\t"<<args.myVcfRecord.get1BasedPosition()<<endl;
 
             if(args.myVcfRecord.getGT(i, j)>=0)
                 args.Haplotypes[haplotype_index]+= (char)('0'+args.myVcfRecord.getGT(i, j));

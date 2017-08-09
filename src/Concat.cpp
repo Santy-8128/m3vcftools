@@ -188,6 +188,8 @@ static void ReadOverlappingRegion(int chunkNo, concat_args_t *args)
             if(!args->secondFileBlockHeader.read(args->secondFile,args->out_hdr))
                 error("[ERROR:] Chunk [%s] ends before the chunk preceding it [%s] ", args->fnames[chunkNo-1], args->fnames[chunkNo] );
     }
+    int h=0;
+    
 }
 
 
@@ -265,10 +267,11 @@ static void FlushSecondFileBlockNonOverlappingPart(int chunkNo, concat_args_t *a
 static void FlushOverlappingPart(int chunkNo, concat_args_t *args)
 {
     int FirstBlockHeaderIndex=0, FirstRecordIndex=0;
-
-    while(args->FirstFileBlocks[0]->getM3vcfRecord(FirstRecordIndex)->getBasePosition() < args->start_pos[chunkNo]) {FirstRecordIndex++;}
-
-
+    while(args->FirstFileBlocks[0]->getM3vcfRecord(FirstRecordIndex)->getBasePosition() < args->start_pos[chunkNo]) 
+    {
+        FirstRecordIndex++;
+    }
+    int SavedFirstRecordIndex = FirstRecordIndex;
     for(int i=0; i<(int)args->SecondFileBlocks.size()-1; i++)
     {
 
@@ -278,8 +281,9 @@ static void FlushOverlappingPart(int chunkNo, concat_args_t *args)
             if(args->SecondFileBlocks[i]->getM3vcfRecord(j)->IsMatching(*args->FirstFileBlocks[FirstBlockHeaderIndex]->getM3vcfRecord(FirstRecordIndex))!=1)
                 error("[ERROR:] Variant [%s] present only in one chunk [%s]\n",
                       args->SecondFileBlocks[i]->getM3vcfRecord(j)->getVariantID().c_str(),
-                      args->fnames[chunkNo-1]);
+                      args->fnames[chunkNo]);
 
+//            cout<<" WEll = "<<i<<"\t"<<FirstRecordIndex++<<endl;
             FirstRecordIndex++;
             if(FirstRecordIndex>=args->FirstFileBlocks[FirstBlockHeaderIndex]->getNumMarkers())
             {
@@ -295,9 +299,14 @@ static void FlushOverlappingPart(int chunkNo, concat_args_t *args)
 
     }
 
+    args->FirstFileBlocks[0]->DeleteVariantsFrom(SavedFirstRecordIndex+1);
+    args->FirstFileBlocks[0]->write(args->outFile);
+    
+    for(int i=0; i<(int)args->SecondFileBlocks.size()-1; i++)
+    {
+       args->SecondFileBlocks[i]->write(args->outFile);
+    }
 
-
-    int h=1;
 }
 
 static void ConcatenateThisChunkToPrevious(int chunkNo, concat_args_t *args)

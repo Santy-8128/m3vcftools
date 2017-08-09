@@ -36,12 +36,12 @@ public:
         myHeaderLines.clear();
         myHeaderLines.push_back("##fileformat=M3VCFv"+(string)M3VCF_VERSION);
         
-        myHeaderLines.resize(thisHeader.getNumMetaLines()+1);
-        for(int i=1; i<thisHeader.getNumMetaLines(); i++)
+        myHeaderLines.resize(thisHeader.getNumMetaLines()+2);
+        for(int i=0; i<thisHeader.getNumMetaLines(); i++)
         {
-            myHeaderLines[i]=thisHeader.getMetaLine(i);            
+            myHeaderLines[i+1]=thisHeader.getMetaLine(i);            
         }
-        myHeaderLines[thisHeader.getNumMetaLines()]=thisHeader.getHeaderLine();             
+        myHeaderLines[thisHeader.getNumMetaLines()+1]=thisHeader.getHeaderLine();             
     }
     
     
