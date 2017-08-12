@@ -8,6 +8,7 @@
 
 
 static void usage(FILE *fp);
+//const char* createCommandLine(convert_args_t *args, const char *optionName); 
 int main_m3vcfconcat(int argc, char *argv[]);
 int main_m3vcfcompress(int argc, char *argv[]);
 int main_m3vcfconvert(int argc, char *argv[]);
@@ -123,5 +124,4 @@ static void usage(FILE *fp)
     fprintf(fp,"\n");
     fprintf(fp,"\n");
 }
-
 

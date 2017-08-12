@@ -39,7 +39,8 @@ struct compress_args_t
     int numHaplotypes;
     
     // Haplotype Data
-    vector<string> Haplotypes;int bufferSize;
+    vector<string> Haplotypes; 
+    int bufferSize;
 
     //Common File and Argument Variables
     char **argv;
@@ -48,6 +49,21 @@ struct compress_args_t
     char *sample_include_list, *sample_exlcude_list;
 
 };
+
+static const char* createCommandLine(compress_args_t &args, const char *optionName)
+{
+    string str = "##m3vcftools_Command=" + (string)optionName;
+    for (int i=1; i<args.argc; i++){str+=" "; str += +args.argv[i];}
+    time_t tt;
+    str+="; Date=";
+    time_t rawtime;
+    struct tm * timeinfo;
+    time ( &rawtime );
+    timeinfo = localtime ( &rawtime );
+    str+= asctime (timeinfo)  ;
+    return  str.substr(0,str.size()-1).c_str();
+}
+
 
 static void error(const char *format, ...)
 {
@@ -98,10 +114,12 @@ static int getNumHaplotypes(compress_args_t &args)
 static void AnalyseHeader(compress_args_t &args)
 {
     
-    if (!args.vcfFile.open(args.fname, args.myVcfHeader))error("Failed to open: %s\n", args.fname);
+    if (!args.vcfFile.open(args.fname, args.myVcfHeader))error("[ERROR:] Failed to open: %s\n", args.fname);
     if(!args.MySubsetSamples.init(args.myVcfHeader, args.sample_include_list,
-                                   NULL, args.sample_exlcude_list)) error("Failed to read subset samples file ...\n");
-
+                                   NULL, args.sample_exlcude_list)) error("[ERROR:] Failed to read subset samples file ...\n");
+    
+    if(args.record_cmd_line==1)
+        args.myVcfHeader.appendMetaLine(createCommandLine(args,"compress"));
     args.out_hdr.copyHeader(args.myVcfHeader);
     args.outFile.open(args.output_fname, args.out_hdr, args.output_type==4? InputFile::UNCOMPRESSED : InputFile::GZIP);   
 }
@@ -110,18 +128,15 @@ static void AnalyseHeader(compress_args_t &args)
 static void readThisVcfRecord(compress_args_t &args)
 {
     int haplotype_index=0;
-//    cout<< endl<<" WHAT = "<<args.myVcfHeader.getNumSamples()<<endl;
     for (int i = 0; i<(args.myVcfHeader.getNumSamples()); i++)
     {
         for (int j = 0; j<args.myVcfRecord.getNumGTs(i); j++)
         {
-//            cout<<args.ThisIsTheFirstMarker<<"\t"<<args.Haplotypes[0].length()<<"\t"<<args.myVcfRecord.get1BasedPosition()<<endl;
-
             if(args.myVcfRecord.getGT(i, j)>=0)
                 args.Haplotypes[haplotype_index]+= (char)('0'+args.myVcfRecord.getGT(i, j));
             else
             {
-                error("Missing value not supported in input VCF file \n");
+                error("[ERROR:] Missing value not supported in input VCF file \n");
             }
             haplotype_index++;
         }
@@ -169,6 +184,7 @@ static void copyVcfRecordToM3vcfRecordList(compress_args_t &args)
 static void InitializeHaplotypeData(compress_args_t &args)
 {
     args.numHaplotypes=getNumHaplotypes(args);
+    args.Haplotypes.clear();
     args.Haplotypes.resize(args.numHaplotypes);
 }
            
@@ -231,7 +247,7 @@ static void usage(compress_args_t &args)
     fprintf(stderr, "                                  (faster, but use with caution)  \n");
     fprintf(stderr, "   -b, --buffer <int>             Number of variants to compress at a time [1000]\n");
     fprintf(stderr, "   -o, --output <file>            Write output to a file [standard output]\n");
-    fprintf(stderr, "   -O, --output-type <m|M>        m: compressed M3VCF, M: uncompressed M3VCF [M] \n");
+    fprintf(stderr, "   -O, --output-type <m|M>        m: compressed M3VCF, M: uncompressed M3VCF [m] \n");
  // fprintf(stderr, "   -n, --non-contiguous           Consecutive blocks do NOT overlap at the boundary \n");
    fprintf(stderr, "\n");
     exit(1);
@@ -246,7 +262,7 @@ int main_m3vcfcompress(int argc, char *argv[])
     args.argc    = argc; args.argv = argv;
     args.fixedLength = false;
     args.output_fname = "-";
-    args.output_type = M3VCF;
+    args.output_type = ZIPM3VCF;
     args.bufferSize = 1000;
     args.record_cmd_line = 1;
     args.keepInfo = false;
@@ -280,12 +296,12 @@ int main_m3vcfcompress(int argc, char *argv[])
                 switch (optarg[0]) {
                     case 'm': args.output_type = ZIPM3VCF; break;
                     case 'M': args.output_type = M3VCF; break;
-                    default: error("The output type \"%s\" not recognised\n", optarg);
+                    default: error("[ERROR:] The output type \"%s\" not recognised\n", optarg);
                 };
                 break;
             case  8 : args.record_cmd_line = 0; break;
             case '?': usage(args); break;
-            default: error("Unknown argument: %s\n", optarg);
+            default: error("[ERROR:] Unknown argument: %s\n", optarg);
         }
     }
 
@@ -299,7 +315,7 @@ int main_m3vcfcompress(int argc, char *argv[])
     else args.fname = argv[optind];
     if ( args.bufferSize<10 )
     {
-        error("Invalid buffer (must be greater than 10): %d\n", args.bufferSize);
+        error("[ERROR:] Invalid buffer (must be greater than 10): %d\n", args.bufferSize);
     }
 
     if(args.sample_include_list!=NULL)

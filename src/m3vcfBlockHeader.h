@@ -116,21 +116,9 @@ public:
     /// This function copies ploidy information from VCF record
     /// \return is NULL
     /// \param is VcfRecord type
-    void updatePloidy(VcfRecord &thisRecord)
-    {
-        numSamples=thisRecord.getNumSamples();
-
-        SampleNoHaplotypes.resize(numSamples);
-        for (int i = 0; i<(numSamples); i++)
-        {
-            SampleNoHaplotypes[i]=(thisRecord.getNumGTs(i));
-        }
-    }
-
-//
-
-////     bool isValid();
-//
+    void updatePloidy(VcfRecord &thisRecord);
+    
+   
 //    ///////////////////////
 //    /// @name  Get Vcf Fields
 //    /// Get methods for record fields (do not set status).
@@ -142,6 +130,7 @@ public:
         int getSamplePloidy(int index) {return(SampleNoHaplotypes[index]);}
         int getNumMarkers() {return(numMarkers);}
         int getNumUniqueReps() {return(numUniqueReps);}
+        int getNumHaplotypes() {return(numHaplotypes);}
         int getUniqueIndexMap(int index) {return(UniqueIndexMap[index]);}
 
         void initUniqueIndexMap(int n){UniqueIndexMap.resize(n);return;}
@@ -151,15 +140,7 @@ public:
         void setEndBasePosition(int &pos) {endPosition = pos;}
         void setNumMarkers(int pos) {numMarkers = pos;}
         void setNumUniqueReps(int pos) {numUniqueReps = pos;}
-
-//            myChrom = thisRecord.getChromStr();
-
-//    string infoString;
-//    vector<AlleleType> UniqueRepAllele;
-//    int numUniqueReps;
-
-
-
+        
 
 
 

@@ -112,7 +112,6 @@ bool m3vcfHeader::read(IFILE filePtr)
         if((newStr[0] == '#') && (newStr[1] != '#'))
         {
             myHasHeaderLine = true;
-
             // Parse the header line to get the sample information.
             String tempString = newStr.c_str();
             myParsedHeaderLine.ReplaceColumns(tempString, '\t');
@@ -126,10 +125,40 @@ bool m3vcfHeader::read(IFILE filePtr)
                                "Error reading VCF Meta/Header, line not starting with '##' found before the header line.");
             return(false);
         }
+        
+        if(myHeaderLines.size()==1)
+        {
+            if(myHeaderLines.back().substr(0,12)!="##fileformat")
+            {
+                myStatus.setStatus(StatGenStatus::INVALID,
+                "Error reading VCF Meta/Header, first line is NOT ##fileformat");
+                return(false);
+            }
+            if(myHeaderLines.back().length()<22 || atof(myHeaderLines.back().substr(19,3).c_str())<2.0)
+            {
+                cout<<atof(myHeaderLines.back().substr(19,3).c_str())<<endl;
+                myStatus.setStatus(StatGenStatus::INVALID,
+                "Error with M3VCF FORMAT VERSION (must be at least than 2.0) !!! ");
+                return(false);
+            }
+        }
     }
     return(true);
 }
+  
+void m3vcfHeader::copyHeader(VcfHeader &thisHeader)
+{
+    myHeaderLines.clear();
+    myHeaderLines.push_back("##fileformat=M3VCFv"+(string)M3VCF_VERSION);
 
+    myHeaderLines.resize(thisHeader.getNumMetaLines()+2);
+    for(int i=0; i<thisHeader.getNumMetaLines(); i++)
+    {
+        myHeaderLines[i+1]=thisHeader.getMetaLine(i);            
+    }
+    myHeaderLines[thisHeader.getNumMetaLines()+1]=thisHeader.getHeaderLine();             
+}
+    
 
 void m3vcfHeader::reset()
 {
@@ -228,7 +257,6 @@ bool m3vcfHeader::checkMergeHeader(m3vcfHeader &Header)
     for(int i=0;i<numSamples;i++)
     {
         if(SampleNames[i]!=Header.SampleNames[i]) return false;
-//        if(SamplePloidy[i]!=Header.SamplePloidy[i]) return false;
     }
     return true;
 }

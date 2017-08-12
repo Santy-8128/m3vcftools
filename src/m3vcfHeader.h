@@ -13,6 +13,32 @@ using namespace std;
 /// This header file provides interface for dealing with M3VCF Meta/Header lines.
 class m3vcfHeader
 {
+    
+    
+private:
+    m3vcfHeader(const m3vcfHeader& thisHeader);
+    m3vcfHeader& operator=(const m3vcfHeader& thisHeader);
+
+    // Make sure the last header line is synced with the parsed header line.
+    // This is used when samples are removed.
+    void syncHeaderLine();
+
+    static const int NUM_NON_SAMPLE_HEADER_COLS = 9;
+
+    // Is set to true once the header line has been set, false until then.
+    bool myHasHeaderLine;
+
+    int numSamples;
+    std::vector<string> myHeaderLines;
+    std::vector<string> SampleNames;
+    std::vector<int> SamplePloidy;
+
+    StringArray myParsedHeaderLine;
+
+    // The status of the last failed command.
+    StatGenStatus myStatus;
+    
+    
 public:
     /// Default Constructor, initializes the variables.
     m3vcfHeader();
@@ -26,24 +52,9 @@ public:
     /// the specified filePtr, false if not.
     bool read(IFILE filePtr);
 
-    
-    
-    
     /// This function copies header information from VcfHeader
     /// and updates to m3vcf header
-    void copyHeader(VcfHeader &thisHeader)
-    {
-        myHeaderLines.clear();
-        myHeaderLines.push_back("##fileformat=M3VCFv"+(string)M3VCF_VERSION);
-        
-        myHeaderLines.resize(thisHeader.getNumMetaLines()+2);
-        for(int i=0; i<thisHeader.getNumMetaLines(); i++)
-        {
-            myHeaderLines[i+1]=thisHeader.getMetaLine(i);            
-        }
-        myHeaderLines[thisHeader.getNumMetaLines()+1]=thisHeader.getHeaderLine();             
-    }
-    
+    void copyHeader(VcfHeader &thisHeader);
     
     /// Write the header to the specified file.
     /// \param filePtr IFILE to write to.
@@ -57,8 +68,7 @@ public:
      /// Sparse the Header Line and get names of samples and their ploidy
     bool SparseSampleNames();
 
-//
-//    bool m3vcfHeader::()
+    
     /// Returns the status associated with the last method that sets the status.
     /// \return StatGenStatus of the last command that sets status.
     const StatGenStatus& getStatus();
@@ -113,28 +123,6 @@ public:
 
 protected:
 
-private:
-    m3vcfHeader(const m3vcfHeader& thisHeader);
-    m3vcfHeader& operator=(const m3vcfHeader& thisHeader);
-
-    // Make sure the last header line is synced with the parsed header line.
-    // This is used when samples are removed.
-    void syncHeaderLine();
-
-    static const int NUM_NON_SAMPLE_HEADER_COLS = 9;
-
-    // Is set to true once the header line has been set, false until then.
-    bool myHasHeaderLine;
-
-    int numSamples;
-    std::vector<string> myHeaderLines;
-    std::vector<string> SampleNames;
-    std::vector<int> SamplePloidy;
-
-    StringArray myParsedHeaderLine;
-
-    // The status of the last failed command.
-    StatGenStatus myStatus;
 };
 
 

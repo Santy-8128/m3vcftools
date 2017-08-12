@@ -6,6 +6,24 @@ void m3vcfRecord::copyStartInfotoBlock(m3vcfBlockHeader &thisBlock)
     thisBlock.setStartBasePosition(BasePositionVal);
 }
 
+void m3vcfRecord::writeVcfRecordGenotypes(IFILE filePtr, m3vcfBlockHeader &ThisHeader)
+{
+    vector<AlleleType> tempAlleles(numUniqueReps,'0');
+
+    for(int i=0; i<numAltHaplo; i++)
+        tempAlleles[altHaploIndex[i]]='1';
+
+    ifprintf(filePtr,"GT");
+    int HapCount = 0;
+    for(int i=0; i<ThisHeader.getNumSamples(); i++)
+    {   
+        ifprintf(filePtr, "\t%c",tempAlleles[ThisHeader.getUniqueIndexMap(HapCount++)]);
+        if(ThisHeader.getSamplePloidy(i)==2)
+            ifprintf(filePtr, "|%c",tempAlleles[ThisHeader.getUniqueIndexMap(HapCount++)]);           
+    }
+    ifprintf(filePtr, "\n");
+}
+
 
 void m3vcfRecord::copyEndInfotoBlock(m3vcfBlockHeader &thisBlock)
 {
@@ -49,19 +67,6 @@ m3vcfRecord::~m3vcfRecord()
 {
 }
 
-
-bool m3vcfRecord::copyRecord(VcfRecord &thisRecord)
-{
-    thisRecord.reset();
-    
-    thisRecord.setChrom(myChrom.c_str());
-    thisRecord.set1BasedPosition(BasePositionVal);
-    thisRecord.setID(varID.c_str());
-    thisRecord.setRef(refAlleleString.c_str());
-    thisRecord.setAlt(allAltAlleleString.c_str()); 
-    
-    return true;
-}
 
 bool m3vcfRecord::read  (IFILE filePtr,
                           m3vcfBlockHeader &ThisBlock,
@@ -220,9 +225,6 @@ void m3vcfRecord::reset()
     numAltHaplo=0;
     BasePositionVal = -2;
     numUniqueReps = 0;
-
-
-    
     myStatus = StatGenStatus::SUCCESS;
 }
 
@@ -494,3 +496,16 @@ bool m3vcfRecord::readTilTab(IFILE filePtr, std::string& stringRef)
     return(true);
 }
 
+
+bool m3vcfRecord::copyRecord(VcfRecord &thisRecord)
+{
+    thisRecord.reset();
+    
+    thisRecord.setChrom(myChrom.c_str());
+    thisRecord.set1BasedPosition(BasePositionVal);
+    thisRecord.setID(varID.c_str());
+    thisRecord.setRef(refAlleleString.c_str());
+    thisRecord.setAlt(allAltAlleleString.c_str()); 
+    
+    return true;
+}

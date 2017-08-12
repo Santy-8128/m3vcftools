@@ -26,31 +26,34 @@ struct concat_args_t
 {
 //    bcf_srs_t *files;
 //    htsFile *out_fh;
-    int output_type, n_threads, record_cmd_line;
     m3vcfHeader out_hdr;
     m3vcfFileWriter <m3vcfHeader> outFile;
-
-
     m3vcfBlockHeader firstFileBlockHeader, secondFileBlockHeader;
     m3vcfRecord firstFileRecord, secondFileRecord;
     m3vcfHeader myCommonHeader;
     vector<m3vcfBlock*> FirstFileBlocks, SecondFileBlocks;
-
+    m3vcfBlock SecondFileBlock;
 
     // File Handling Variables
     IFILE firstFile, secondFile;
 
-
-
+    // Hammond Distance 
+    vector<int> HammondDist;
+    vector<int> SamplesToBeSwapped;
+    int NoOverlappingMarkers;
+    int FirBPos, FirRPos, SecBPos, SecRPos;
+    
     // Variables for frameworking
     vector<int> start_pos;
 
 
     //Common File and Argument Variables
-    char **argv, **fnames;
+    char **argv;
+    vector<char*> fnames;
     const char *output_fname, *file_list;
     int phased_concat, nfnames, argc;
-
+    int output_type, record_cmd_line;
+ 
 };
 
 
@@ -64,252 +67,325 @@ void error(const char *format, ...)
     exit(-1);
 }
 
-static void Initialize(concat_args_t *args)
+
+static const char* createCommandLine(concat_args_t &args, const char *optionName)
 {
-    if ( args->phased_concat )
+    string str = "##m3vcftools_Command=" + (string)optionName;
+    for (int i=1; i<args.argc; i++){str+=" "; str += +args.argv[i];}
+    time_t tt;
+    str+="; Date=";
+    time_t rawtime;
+    struct tm * timeinfo;
+    time ( &rawtime );
+    timeinfo = localtime ( &rawtime );
+    str+= asctime (timeinfo)  ;
+    return  str.substr(0,str.size()-1).c_str();
+}
+
+
+
+static void Initialize(concat_args_t &args)
+{
+    if ( args.phased_concat == 1 )
     {
-        args->start_pos.resize(args->nfnames+1,0);
+        args.start_pos.clear();
+        args.start_pos.resize(args.nfnames+1,0);
     }
-    args->firstFile = NULL, args->secondFile = NULL;
+    args.firstFile = NULL, args.secondFile = NULL;
 
 }
 
 
-static void AnalyseHeader(concat_args_t *args)
+static void AnalyseHeader(concat_args_t &args)
 {
     // Gather and Merge Header Information
     int i;
-    for (i=0; i<args->nfnames; i++)
+    for (i=0; i<args.nfnames; i++)
     {
-        IFILE m3vcfxStream = ifopen(args->fnames[i], "r"); if ( !m3vcfxStream ) error("Failed to open: %s\n", args->fnames[i]);
+        IFILE m3vcfxStream = ifopen(args.fnames[i], "r"); if ( !m3vcfxStream ) error("[ERROR:] Failed to open: %s\n", args.fnames[i]);
         m3vcfHeader myHeader;
         myHeader.read(m3vcfxStream);
 
-
-        if (!args->out_hdr.checkMergeHeader(myHeader) )
-            error("Different sample information in %s.\n", args->fnames[i]);
+        // Check if samples are same and in same order in different files
+        if (!args.out_hdr.checkMergeHeader(myHeader) )
+            error("[ERROR:] Different sample information in %s.\n", args.fnames[i]);
         else
-            args->out_hdr.mergeHeader(myHeader);
+            args.out_hdr.mergeHeader(myHeader);
 
-        if ( args->phased_concat )
+        // If phased concat then store first position to get framework
+        if ( args.phased_concat == 1 )
         {
             m3vcfBlockHeader CurrentBlock;
             CurrentBlock.read(m3vcfxStream,myHeader,true);
-            args->start_pos[i] = CurrentBlock.getStartBasePosition();
+            args.start_pos[i] = CurrentBlock.getStartBasePosition();
         }
         ifclose(m3vcfxStream);
     }
-    args->start_pos[i]=MAX_BASE_POSITION;
-
-    if (args->record_cmd_line) args->out_hdr.appendMetaLine("m3vcftools_concat");
-    args->outFile.open(args->output_fname,args->out_hdr);
-}
-
-
-static void FlushFirstFileNonOverlappingPart(concat_args_t *args)
-{
-    args->firstFile = ifopen(args->fnames[0], "r"); if ( !args->firstFile ) error("Failed to open: %s\n", args->fnames[0]);
-    args->myCommonHeader.read(args->firstFile);
-
-    while(args->firstFileBlockHeader.read(args->firstFile,args->out_hdr) && args->firstFileBlockHeader.getEndBasePosition()<=args->start_pos[1])
+    
+    if ( args.phased_concat == 1 )
     {
-        args->outFile.writeBlock(args->firstFileBlockHeader);
-        while(!args->firstFileBlockHeader.isBlockFinished())
+        args.start_pos[i]=MAX_BASE_POSITION;
+        for (i=1; i<args.nfnames; i++)
         {
-            args->firstFileRecord.read(args->firstFile,args->firstFileBlockHeader);
-            args->outFile.writeRecord(args->firstFileRecord);
+            if(args.start_pos[i]<=args.start_pos[i-1]) 
+            error("[ERROR:] Chunk [%s] and [%s] are in the wrong order\n", args.fnames[i-1], args.fnames[i]);
         }
+    
+        
     }
-
+    if (args.record_cmd_line==1) args.out_hdr.appendMetaLine(createCommandLine(args,"concat"));
+    args.outFile.open(args.output_fname, args.out_hdr, args.output_type==4? InputFile::UNCOMPRESSED : InputFile::GZIP);   
 }
 
 
-static void FlushFirstFileBlockNonOverlappingPart(int chunkNo, concat_args_t *args)
+static void FlushFirstFileNonOverlappingPart(concat_args_t &args)
 {
-    args->outFile.writeBlock(args->firstFileBlockHeader);
-    args->firstFileRecord.read(args->firstFile,args->firstFileBlockHeader);
-    args->outFile.writeRecord(args->firstFileRecord);
-
-    while(!args->firstFileBlockHeader.isBlockFinished() && args->firstFileRecord.getBasePosition() < args->secondFileRecord.getBasePosition())
+    args.firstFile = ifopen(args.fnames[0], "r"); if ( !args.firstFile ) error("[ERROR:] Failed to open: %s\n", args.fnames[0]);
+    args.myCommonHeader.read(args.firstFile);
+    bool ReadStatus = args.firstFileBlockHeader.read(args.firstFile,args.out_hdr);
+    
+    // Use ReadStatus to see if the end of firstFile is reached before the start
+    // position of the second file. This is ojectively the first file, so does
+    // NOT need any phase swapping
+    while(ReadStatus && args.firstFileBlockHeader.getEndBasePosition()<=args.start_pos[1])
     {
-        args->firstFileRecord.read(args->firstFile,args->firstFileBlockHeader);
-        args->outFile.writeRecord(args->firstFileRecord);
-
-    }
-
-    if(args->firstFileRecord.IsMatching(args->secondFileRecord) == 0)
-        error("[ERROR:] Variant [%s] present only in one chunk [%s]\n", args->firstFileRecord.PrintVariant().c_str(),args->fnames[chunkNo]);
-
-}
-
-
-
-static void InitSecondFile(int chunkNo, concat_args_t *args)
-{
-    args->secondFile = ifopen(args->fnames[chunkNo], "r"); if ( !args->secondFile ) error("Failed to open: %s\n", args->fnames[chunkNo]);
-    args->myCommonHeader.read(args->secondFile);
-}
-
-
-
-static void CheckIfOverlaps(int chunkNo, concat_args_t *args)
-{
-    if(args->firstFileBlockHeader.isBlockFinished())
-    {
-        if(!args->firstFileBlockHeader.read(args->firstFile,args->out_hdr))
-            error("[ERROR:] Only one variant overlaps between chunk [%s] and [%s]\n", args->fnames[chunkNo-1], args->fnames[chunkNo] );
-        else
-            args->outFile.writeBlock(args->firstFileBlockHeader);
-    }
-
-    if(args->secondFileBlockHeader.isBlockFinished())
-        if(!args->secondFileBlockHeader.read(args->secondFile,args->out_hdr))
-            error("[ERROR:] No overlap between chunk [%s] and [%s]\n", args->fnames[chunkNo-1], args->fnames[chunkNo] );
-
-}
-
-static void ReadOverlappingRegion(int chunkNo, concat_args_t *args)
-{
-    while(!args->firstFileBlockHeader.isBlockFinished() && !args->secondFileBlockHeader.isBlockFinished() )
-    {
-        args->firstFileRecord.read(args->firstFile,args->firstFileBlockHeader);
-        args->outFile.writeRecord(args->firstFileRecord);
-        args->secondFileRecord.read(args->secondFile,args->secondFileBlockHeader);
-
-        if(args->firstFileBlockHeader.isBlockFinished())
+        args.outFile.writeBlock(args.firstFileBlockHeader);
+        while(!args.firstFileBlockHeader.isBlockFinished())
         {
-            if(!args->firstFileBlockHeader.read(args->firstFile,args->out_hdr))
-                break;
-            else
-                args->outFile.writeBlock(args->firstFileBlockHeader);
+            args.firstFileRecord.read(args.firstFile,args.firstFileBlockHeader);
+            args.outFile.writeRecord(args.firstFileRecord);
+        }
+        ReadStatus = args.firstFileBlockHeader.read(args.firstFile,args.out_hdr);
+    }
+    
+    if(ReadStatus==false)
+        error("[ERROR:] Consecutive chunks [%s] and [%s] do NOT overlap\n", args.fnames[0], args.fnames[1]);
+
+}
+
+static void InitSecondFile(int chunkNo, concat_args_t &args)
+{
+    args.secondFile = ifopen(args.fnames[chunkNo], "r"); if ( !args.secondFile ) error("[ERROR:] Failed to open: %s\n", args.fnames[chunkNo]);
+    args.myCommonHeader.read(args.secondFile);
+}
+
+
+static void SaveFirstFileOverlappingRegion(int chunkNo, concat_args_t &args)
+{
+    args.FirstFileBlocks.clear();
+    args.FirstFileBlocks.resize(1);
+    args.FirstFileBlocks[0]=new m3vcfBlock;
+    args.FirstFileBlocks[0]->CopyBlockHeader(args.firstFileBlockHeader, args.myCommonHeader);
+
+    do
+    {
+        // We should swap the phase as we are reading the data.
+        // This way we ensure that the new read data of the overlapping part
+        // is already phased-aligned correctly. This way we check for phase-
+        // alignment with the next file in the proper way
+        args.FirstFileBlocks.back()->swapPhase(args.SamplesToBeSwapped);
+        while(!args.FirstFileBlocks.back()->isBlockFinished())
+        {
+            (args.FirstFileBlocks.back())->readRecord(args.firstFile);
         }
 
-        if(args->secondFileBlockHeader.isBlockFinished())
-            if(!args->secondFileBlockHeader.read(args->secondFile,args->out_hdr))
-                error("[ERROR:] Chunk [%s] ends before the chunk preceding it [%s] ", args->fnames[chunkNo-1], args->fnames[chunkNo] );
+        args.FirstFileBlocks.resize(args.FirstFileBlocks.size()+1);
+        args.FirstFileBlocks.back()=new m3vcfBlock;
+    }while((args.FirstFileBlocks.back()->readHeader(args.firstFile,args.out_hdr)));
+    
+    // Remove the last information from FirstFileBlocks since it is empty
+    args.FirstFileBlocks.pop_back();
+    ifclose(args.firstFile);
+}
+
+static void SaveSecondFileOverlappingRegion(int chunkNo, concat_args_t &args)
+{
+    // Get the Last position of the first file chunk (that would determine 
+    // the overlapping region)
+    int PrevLastPosition = args.FirstFileBlocks.back()->getEndBasePosition();
+
+    InitSecondFile(chunkNo, args);
+
+    args.SecondFileBlocks.clear();
+    args.SecondFileBlocks.resize(1);
+    args.SecondFileBlocks[0]=new m3vcfBlock;
+    args.NoOverlappingMarkers = 0;
+    bool ReadStatus=args.SecondFileBlocks.back()->readHeader(args.secondFile,args.out_hdr);
+    
+    while(ReadStatus && args.SecondFileBlocks.back()->getStartBasePosition()<PrevLastPosition)
+    {
+        // Here we do NOT do any phase alignment since this is the new file
+        // overlapping part that is being read.
+        while(!args.SecondFileBlocks.back()->isBlockFinished())
+        {
+            (args.SecondFileBlocks.back())->readRecord(args.secondFile);
+            args.NoOverlappingMarkers++;
+        }
+
+        args.NoOverlappingMarkers--;
+        args.SecondFileBlocks.resize(args.SecondFileBlocks.size()+1);
+        args.SecondFileBlocks.back()=new m3vcfBlock;
+        ReadStatus=args.SecondFileBlocks.back()->readHeader(args.secondFile,args.out_hdr);
+    
     }
-    int h=0;
+    if(ReadStatus==false)
+        error("[ERROR:] Chunk [%s] is contained inside chunk [%s]\n", args.fnames[chunkNo-1], args.fnames[chunkNo]);
+
+    if(args.SecondFileBlocks.size()==1 && args.SecondFileBlocks.back()->getStartBasePosition()>PrevLastPosition)
+    error("[ERROR:] Consecutive chunks [%s] and [%s] do NOT overlap\n", args.fnames[chunkNo-1], args.fnames[chunkNo]);
+     
+
+
+}
+
+static void FlushSecondFileBlockNonOverlappingPart(int chunkNo, concat_args_t &args)
+{
+    
+    args.SecondFileBlocks.back()->CopyToBlockHeader(args.SecondFileBlock);
+    bool ReadStatus=true;
+      
+    do
+    {
+        int MarkerCounter = 0;
+        // Swap the Phase as you print out the blocks for the non-overlapping part
+        // of the second file
+        args.SecondFileBlock.swapPhase(args.SamplesToBeSwapped);
+        args.SecondFileBlock.writeHeader(args.outFile);
+        while(!args.SecondFileBlock.isBlockFinished())
+        {
+            args.SecondFileBlock.readRecord(args.secondFile);
+            args.SecondFileBlock.writeRecord(args.outFile, MarkerCounter++);
+        }
+        ReadStatus=args.SecondFileBlock.readHeader(args.secondFile,args.out_hdr);
+    }
+    while(ReadStatus && args.SecondFileBlock.getEndBasePosition()<=args.start_pos[chunkNo+1]);
+
+    // If end of second file is reached before the beginning of the next and if this is not
+    // the last pair of chunks, then throw and error for non-overlapping
+    if(ReadStatus==false && chunkNo<args.nfnames-1)
+        error("[ERROR:] Consecutive chunks [%s] and [%s] do NOT overlap\n", args.fnames[chunkNo], args.fnames[chunkNo+1]);
+
+    // Swap First File and Second File and their Block Header 
+    args.SecondFileBlock.CopyToBlockHeader(args.firstFileBlockHeader);
+    args.firstFile=args.secondFile;
+
+}
+
+   
+   
+static void UpdateHammondDistance(concat_args_t &args, 
+        int FirstHeaderIndex, int FirstRecordIndex,
+        int SecondHeaderIndex, int SecondRecordIndex)
+{
+    
+    args.FirstFileBlocks[FirstHeaderIndex]->getM3vcfRecord(FirstRecordIndex)->Deserialize();
+    args.SecondFileBlocks[SecondHeaderIndex]->getM3vcfRecord(SecondRecordIndex)->Deserialize();
+    
+    int HaploIndex = 0;
+    for(int i=0; i<args.myCommonHeader.getNumSamples(); i++)
+    {
+        
+        if(args.FirstFileBlocks[FirstHeaderIndex]->getSamplePloidy(i)==2)
+        {
+            AlleleType L1 = args.FirstFileBlocks[FirstHeaderIndex]->getAllele(FirstRecordIndex, HaploIndex);
+            AlleleType R1 = args.SecondFileBlocks[SecondHeaderIndex]->getAllele(SecondRecordIndex, HaploIndex);
+            AlleleType R2 = args.SecondFileBlocks[SecondHeaderIndex]->getAllele(SecondRecordIndex, HaploIndex+1);
+            
+            if(L1!=R1)
+                args.HammondDist[2*i]++;
+            if(L1!=R2)
+                args.HammondDist[2*i+1]++;
+        }
+        HaploIndex+=args.FirstFileBlocks[FirstHeaderIndex]->getSamplePloidy(i);
+    }
+   
+}
+
+static void FlushOverlappingPart(int chunkNo, concat_args_t &args)
+{
+    
+    args.FirstFileBlocks[args.FirBPos]->DeleteVariantsFrom(args.FirRPos+1);
+    for(int i=0; i<=args.FirBPos; i++)
+    {
+        args.FirstFileBlocks[i]->write(args.outFile);
+    }
+    args.SecondFileBlocks[args.SecBPos]->DeleteVariantsTill(args.SecRPos-1);
+    for(int i=args.SecBPos; i<(int)args.SecondFileBlocks.size()-1; i++)
+    {
+        args.SecondFileBlocks[i]->swapPhase(args.SamplesToBeSwapped);
+        args.SecondFileBlocks[i]->write(args.outFile);
+    }
     
 }
 
 
-static void SaveFirstFileOverlappingRegion(int chunkNo, concat_args_t *args)
+static void CreateSamplesToBeSwappedList(int chunkNo, concat_args_t &args)
 {
-    args->FirstFileBlocks.clear();
-    args->FirstFileBlocks.resize(1);
-    args->FirstFileBlocks[0]=new m3vcfBlock;
-    args->FirstFileBlocks[0]->CopyBlockHeader(args->firstFileBlockHeader);
-
-    do
+    args.SamplesToBeSwapped.clear();
+    for(int i=0; i<args.myCommonHeader.getNumSamples(); i++)
     {
-        while(!args->FirstFileBlocks.back()->isBlockFinished())
+        if(args.SecondFileBlocks[0]->getSamplePloidy(i)==2)
         {
-            (args->FirstFileBlocks.back())->readRecord(args->firstFile);
-        }
-
-        args->FirstFileBlocks.resize(args->FirstFileBlocks.size()+1);
-        args->FirstFileBlocks.back()=new m3vcfBlock;
-    }while((args->FirstFileBlocks.back()->readHeader(args->firstFile,args->out_hdr)));
-
-    args->FirstFileBlocks.pop_back();
-    ifclose(args->firstFile);
-}
-
-
-
-static void SaveSecondFileOverlappingRegion(int chunkNo, concat_args_t *args)
-{
-
-    int PrevLastPosition = args->FirstFileBlocks.back()->getEndBasePosition();
-
-    InitSecondFile(chunkNo, args);
-
-    args->SecondFileBlocks.clear();
-    args->SecondFileBlocks.resize(1);
-    args->SecondFileBlocks[0]=new m3vcfBlock;
-
-
-    while((args->SecondFileBlocks.back()->readHeader(args->secondFile,args->out_hdr))
-          && args->SecondFileBlocks.back()->getStartBasePosition()<PrevLastPosition)
-    {
-        while(!args->SecondFileBlocks.back()->isBlockFinished())
-        {
-            (args->SecondFileBlocks.back())->readRecord(args->secondFile);
-        }
-
-        args->SecondFileBlocks.resize(args->SecondFileBlocks.size()+1);
-        args->SecondFileBlocks.back()=new m3vcfBlock;
-    }
-
-
-}
-
-static void FlushSecondFileBlockNonOverlappingPart(int chunkNo, concat_args_t *args)
-{
-    args->SecondFileBlocks.back()->CopyToBlockHeader(args->secondFileBlockHeader);
-
-    do
-    {
-        args->outFile.writeBlock(args->secondFileBlockHeader);
-        while(!args->secondFileBlockHeader.isBlockFinished())
-        {
-            args->secondFileRecord.read(args->secondFile,args->secondFileBlockHeader);
-            args->outFile.writeRecord(args->secondFileRecord);
+            if(args.HammondDist[2*i+1] < args.HammondDist[2*i])
+                args.SamplesToBeSwapped.push_back(i);
         }
     }
-    while((args->secondFileBlockHeader.read(args->secondFile,args->out_hdr))
-          && args->secondFileBlockHeader.getEndBasePosition()<=args->start_pos[chunkNo+1]);
-
-
+    
 }
 
 
-static void FlushOverlappingPart(int chunkNo, concat_args_t *args)
+static void AnalyseAndFlushOverlappingPart(int chunkNo, concat_args_t &args)
 {
     int FirstBlockHeaderIndex=0, FirstRecordIndex=0;
-    while(args->FirstFileBlocks[0]->getM3vcfRecord(FirstRecordIndex)->getBasePosition() < args->start_pos[chunkNo]) 
+    while(args.FirstFileBlocks[0]->getM3vcfRecord(FirstRecordIndex)->getBasePosition() < args.start_pos[chunkNo]) 
     {
         FirstRecordIndex++;
     }
-    int SavedFirstRecordIndex = FirstRecordIndex;
-    for(int i=0; i<(int)args->SecondFileBlocks.size()-1; i++)
+    args.HammondDist.clear(); args.HammondDist.resize(2*args.myCommonHeader.getNumSamples(),0);
+    
+    int NoMarkersRead = 0;
+    for(int i=0; i<(int)args.SecondFileBlocks.size()-1; i++)
     {
 
-        for(int j=0; j< args->SecondFileBlocks[i]->getNumMarkers(); j++)
+        for(int j=0; j< args.SecondFileBlocks[i]->getNumMarkers(); j++)
         {
 
-            if(args->SecondFileBlocks[i]->getM3vcfRecord(j)->IsMatching(*args->FirstFileBlocks[FirstBlockHeaderIndex]->getM3vcfRecord(FirstRecordIndex))!=1)
+            if(args.SecondFileBlocks[i]->getM3vcfRecord(j)->IsMatching( *(args.FirstFileBlocks[FirstBlockHeaderIndex]->getM3vcfRecord(FirstRecordIndex) )  ) !=1)
                 error("[ERROR:] Variant [%s] present only in one chunk [%s]\n",
-                      args->SecondFileBlocks[i]->getM3vcfRecord(j)->getVariantID().c_str(),
-                      args->fnames[chunkNo]);
+                      args.SecondFileBlocks[i]->getM3vcfRecord(j)->getVariantID().c_str(),
+                      args.fnames[chunkNo]);
 
-//            cout<<" WEll = "<<i<<"\t"<<FirstRecordIndex++<<endl;
-            FirstRecordIndex++;
-            if(FirstRecordIndex>=args->FirstFileBlocks[FirstBlockHeaderIndex]->getNumMarkers())
+            UpdateHammondDistance(  args, FirstBlockHeaderIndex, FirstRecordIndex, i, j);
+            NoMarkersRead++;
+            if(NoMarkersRead==args.NoOverlappingMarkers/2)
             {
-                if(FirstBlockHeaderIndex==args->FirstFileBlocks.size()-1) break;
+                args.FirBPos=FirstBlockHeaderIndex;
+                args.FirRPos=FirstRecordIndex;
+                args.SecBPos=i;
+                args.SecRPos=j;
+            }
+                
+            
+            FirstRecordIndex++;
+            if(FirstRecordIndex>=args.FirstFileBlocks[FirstBlockHeaderIndex]->getNumMarkers())
+            {
+                if(FirstBlockHeaderIndex==args.FirstFileBlocks.size()-1) break;
                 FirstRecordIndex=0;
                 FirstBlockHeaderIndex++;
                 j--;
             }
-
-            int pp=1;
         }
         FirstRecordIndex--;
 
     }
 
-    args->FirstFileBlocks[0]->DeleteVariantsFrom(SavedFirstRecordIndex+1);
-    args->FirstFileBlocks[0]->write(args->outFile);
-    
-    for(int i=0; i<(int)args->SecondFileBlocks.size()-1; i++)
-    {
-       args->SecondFileBlocks[i]->write(args->outFile);
-    }
-
+    CreateSamplesToBeSwappedList(chunkNo, args);
+    FlushOverlappingPart(chunkNo, args);
+  
+   
 }
 
-static void ConcatenateThisChunkToPrevious(int chunkNo, concat_args_t *args)
+static void ConcatenateThisChunkToPrevious(int chunkNo, concat_args_t &args)
 {
     // Read the overlapping part from first file
     SaveFirstFileOverlappingRegion(chunkNo, args);
@@ -317,138 +393,55 @@ static void ConcatenateThisChunkToPrevious(int chunkNo, concat_args_t *args)
     // Read the overlapping part from second file
     SaveSecondFileOverlappingRegion(chunkNo, args);
 
-
     //Flush Overlapping Part
-    FlushOverlappingPart(chunkNo, args);
-
+    AnalyseAndFlushOverlappingPart(chunkNo, args);
 
     //Flush Remaining non-overlapping part of second file
     FlushSecondFileBlockNonOverlappingPart(chunkNo, args);
-
-    args->firstFileBlockHeader=args->secondFileBlockHeader;
-    args->firstFile=args->secondFile;
-
-    // Open and Initialize the Second File and read Second Block and Record
-
-
-//    InitSecondFile(chunkNo, args);
-//
-//    // First Flush the First File Block until common marker
-//    FlushFirstFileBlockNonOverlappingPart(chunkNo, args);
-//
-//    // Check Overlap Eligibility
-//    CheckIfOverlaps(chunkNo, args);
-//
-//    // Once Overlaps are verified, read both blocks and records together till first file ends
-//    // Throw error if first file ends before second file
-//    ReadOverlappingRegion(chunkNo, args);
-//
-
-    // Next, read the second file, till the start of the next file
-//    do
-//    {
-//        args->outFile.writeBlock(args->secondFileBlockHeader);
-//        while(!args->secondFileBlockHeader.isBlockFinished())
-//        {
-//            args->secondFileRecord.read(args->secondFile,args->secondFileBlockHeader);
-//            args->outFile.writeRecord(args->secondFileRecord);
-//        }
-//    }while(args->secondFileBlockHeader.read(args->secondFile,args->out_hdr)
-//           && args->secondFileBlockHeader.getEndBasePosition()<=args->start_pos[chunkNo+1]);
-//
-
-
-
-
-
-
-//    while(args->firstFileBlockHeader.read(args->firstFile,args->out_hdr) && args->firstFileBlockHeader.getEndBasePosition()<=args->start_pos[1])
-//    {
-//        args->outFile.writeBlock(args->firstFileBlockHeader);
-//        while(!args->firstFileBlockHeader.isBlockFinished())
-//        {
-//            args->firstFileRecord.read(args->firstFile,args->firstFileBlockHeader);
-//            args->outFile.writeRecord(args->firstFileRecord);
-//        }
-//    }
-//
-
 }
 
-static void PerformPhasedConcat(concat_args_t *args)
+static void PerformPhasedConcat(concat_args_t &args)
 {
-
     FlushFirstFileNonOverlappingPart(args);
-
-    for (int i=1; i<args->nfnames; i++)
+    for (int i=1; i<args.nfnames; i++)
     {
         ConcatenateThisChunkToPrevious(i,args);
     }
 }
 
 
-static void init_data(concat_args_t *args)
+static void concat_Data(concat_args_t &args)
 {
     Initialize(args);
     AnalyseHeader(args);
 
-    if(args->phased_concat)
+    if(args.phased_concat == 1)
     {
         PerformPhasedConcat(args);
     }
-
-
-
-
-//    CurrentBlock.write()
-//
-//
-//       m3vcfBlockHeader CurrentBlock;
-//             CurrentBlock.read(m3vcfxStream,myHeader,true);
-//       m3vcfBlockHeader CurrentBlock;
-//             CurrentBlock.read(m3vcfxStream,myHeader,true);
-
-
-//    IFILE m3vcfxStream = ifopen(args->fnames[0], "r");
-//
-//    m3vcfHeader myHeader;
-//    m3vcfBlockHeader CurrentBlock;
-//
-//    myHeader.read(m3vcfxStream);
-//    while(CurrentBlock.read(m3vcfxStream,myHeader))
-//    {
-//
-//         cout<<" My = "<<CurrentBlock.getChromStr()<<" == THIS" <<endl;
-//        cout<<" My = "<<CurrentBlock.getStartBasePosition()<<" == THIS" <<endl;
-//        cout<<" My = "<<CurrentBlock.getEndBasePosition()<<" == THIS" <<endl;
-//        cout<<" My = "<<CurrentBlock.getNumMarkers()<<" == THIS" <<endl;
-//        cout<<" My = "<<CurrentBlock.getNumUniqueReps()<<" == THIS" <<endl<<endl;
-//
-////abort();
-//    }
-//
-
-
+    else
+    {
+        error("[ERROR:] Only ligation is supported currently \n");
+    }
 
 }
 
 
-static void usage(concat_args_t *args)
+static void usage(concat_args_t &args)
 {
     fprintf(stderr, "\n");
     fprintf(stderr, " About:   Concatenate or combine M3VCF files. All source files must have the same sample\n");
     fprintf(stderr, "          columns appearing in the same order. The program can be used, for example, to\n");
     fprintf(stderr, "          ligate haplotypes \n");
-    fprintf(stderr, " Usage:   bcftools concat [options] <A.vcf.gz> [<B.vcf.gz> [...]]\n");
+    fprintf(stderr, " Note :   STDIN(-) cannot be used as in input file for concatenation\n");
+    fprintf(stderr, " Usage:   m3vcftools concat [options] <A.m3vcf.gz> [<B.m3vcf.gz> [...]]\n");
     fprintf(stderr, "\n");
     fprintf(stderr, " Options:\n");
     fprintf(stderr, "   -f, --file-list <file>         Read the list of files from a file.\n");
     fprintf(stderr, "   -l, --ligate                   Ligate phased VCFs by matching phase at overlapping haplotypes\n");
     fprintf(stderr, "       --no-version               do not append version and command line to the header\n");
     fprintf(stderr, "   -o, --output <file>            Write output to a file [standard output]\n");
-    fprintf(stderr, "   -O, --output-type <z|v|m|M>    z: compressed VCF,   v: uncompressed VCF, \n");
-    fprintf(stderr, "                                  m: compressed M3VCF, M: uncompressed M3VCF [M]\n");
-    fprintf(stderr, "       --threads <int>            Number of extra output compression threads [0]\n");
+    fprintf(stderr, "   -O, --output-type <m|M>        m: compressed M3VCF, M: uncompressed M3VCF [m]\n");
     fprintf(stderr, "\n");
     exit(1);
 }
@@ -459,14 +452,17 @@ static void usage(concat_args_t *args)
 int main_m3vcfconcat(int argc, char *argv[])
 {
     int c;
-    concat_args_t* args = new concat_args_t();
+    concat_args_t args;
 
-    args->argc    = argc; args->argv = argv;
-    args->output_fname = "-";
-    args->output_type = M3VCF;
-    args->n_threads = 0;
-    args->record_cmd_line = 1;
-
+    args.argc    = argc; args.argv = argv;
+    args.output_fname = "-";
+    args.output_type = ZIPM3VCF;
+    args.record_cmd_line = 1;
+    args.nfnames=0;
+    args.fnames.clear(); 
+    args.file_list=NULL;
+    args.phased_concat = 0;
+    
     static struct option loptions[] =
     {
 
@@ -481,35 +477,47 @@ int main_m3vcfconcat(int argc, char *argv[])
     while ((c = getopt_long(argc, argv, "lo:O:f:",loptions,NULL)) >= 0)
     {
         switch (c) {
-            case 'l': args->phased_concat = 1; break;
-            case 'f': args->file_list = optarg; break;
-            case 'o': args->output_fname = optarg; break;
+            case 'l': args.phased_concat = 1; break;
+            case 'f': args.file_list = optarg; break;
+            case 'o': args.output_fname = optarg; break;
             case 'O':
                 switch (optarg[0]) {
-                    case 'v': args->output_type = VCF; break;
-                    case 'z': args->output_type = ZIPVCF; break;
-                    case 'm': args->output_type = ZIPM3VCF; break;
-                    case 'M': args->output_type = M3VCF; break;
-                    default: error("The output type \"%s\" not recognised\n", optarg);
+                    case 'm': args.output_type = ZIPM3VCF; break;
+                    case 'M': args.output_type = M3VCF; break;
+                    default: error("[ERROR:] The output type \"%s\" not recognized\n", optarg);
                 };
                 break;
-            case  9 : args->n_threads = strtol(optarg, 0, 0); break;
-            case  8 : args->record_cmd_line = 0; break;
+            case  8 : args.record_cmd_line = 0; break;
             case '?': usage(args); break;
-            default: error("Unknown argument: %s\n", optarg);
+            default: error("[ERROR:] Unknown argument: %s\n", optarg);
         }
     }
+    
     while ( optind<argc )
     {
-        args->nfnames++;
-        args->fnames = (char **)realloc(args->fnames,sizeof(char*)*args->nfnames);
-        args->fnames[args->nfnames-1] = strdup(argv[optind]);
+        args.nfnames++;
+        args.fnames.resize(args.nfnames);
+        args.fnames[args.nfnames-1] = strdup(argv[optind]);
         optind++;
     }
-    if ( !args->nfnames ) usage(args);
+    if ( args.file_list )
+    {
+        if ( args.nfnames>0 ) error("[ERROR:] Cannot combine -f with file names on command line.\n");
+        
+        IFILE myfile = ifopen(args.file_list, "r");
+        if ( !myfile ) error("[ERROR:] Could not read the file: %s\n", args.file_list);
+        string line;
+        while (myfile->readLine(line)!=-1)
+        {
+            args.nfnames++;
+            args.fnames.resize(args.nfnames);
+            args.fnames[args.nfnames-1] = strdup(line.c_str());
+            line.clear();  
+        }
+      }
+    if ( args.nfnames == 0 ) usage(args);
 
-    init_data(args);
-    cout<<" WOOOWWWWWWWWWWWW \n";
+    concat_Data(args);
     return 0;
 }
 

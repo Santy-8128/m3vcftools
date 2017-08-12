@@ -10,6 +10,16 @@ m3vcfBlockHeader::~m3vcfBlockHeader()
 {
 }
 
+void m3vcfBlockHeader::updatePloidy(VcfRecord &thisRecord)
+{
+    numSamples=thisRecord.getNumSamples();
+
+    SampleNoHaplotypes.resize(numSamples);
+    for (int i = 0; i<(numSamples); i++)
+    {
+        SampleNoHaplotypes[i]=(thisRecord.getNumGTs(i));
+    }
+}
 
 bool m3vcfBlockHeader::read(IFILE filePtr, m3vcfHeader &ThisHeader,
                       bool InfoOnly,
@@ -91,9 +101,7 @@ bool m3vcfBlockHeader::read(IFILE filePtr, m3vcfHeader &ThisHeader,
     else
     {
         // Read Number of Markers
-//        cout<<tempString<<endl; 
         string InfoString = FindTokenWithPrefix(tempString.c_str(), semicolSep, "VARIANTS=");
-//        cout<<" THIS = "<<InfoString<<endl;
         if(InfoString!="") { numMarkers = atoi(MyTokenize(InfoString.c_str(), equalSep, 2).c_str());}
         else
         {
@@ -170,7 +178,8 @@ void m3vcfBlockHeader::reset()
     numUniqueReps = 0;
     myChrom.clear();
     myStatus = StatGenStatus::SUCCESS;
-
+    UniqueIndexMap.clear();
+    SampleNoHaplotypes.clear();
 }
 
 

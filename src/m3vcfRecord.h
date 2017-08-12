@@ -25,15 +25,14 @@ private:
 
     string ALT_DELIM;
     static const char MONOMORPH_INDICATOR='-';
-
     std::string myChrom;
     string BasePosition; int BasePositionVal;
     string varID;
     string refAlleleString;
     string allAltAlleleString;
+    vector<string> altAlleleStringArray;
     string qualityString;
     string filterString;
-    vector<string> altAlleleStringArray;
     string infoString;
     vector<AlleleType> UniqueRepAllele;
     vector<SampleIndex> altHaploIndex;
@@ -159,7 +158,17 @@ public:
         void initAltHapIndex(){numAltHaplo=0; altHaploIndex.clear();}
         void initUniqueRepAllele(int n){UniqueRepAllele.resize(n);return;}
         void assignUniqueRepAllele(int &pos, AlleleType val){UniqueRepAllele[pos]=val;}
-
+        void Deserialize()
+        {
+            UniqueRepAllele.resize(numUniqueReps,'0');
+            for(int i=0; i<numAltHaplo; i++)
+                UniqueRepAllele[altHaploIndex[i]]='1';                
+        }
+        
+        AlleleType getAllele(m3vcfBlockHeader &thisBlockHeader, int haploIndex)
+        {
+            return UniqueRepAllele[thisBlockHeader.getUniqueIndexMap(haploIndex)];
+        }
         bool operator <(m3vcfRecord &record){return(BasePositionVal<record.getBasePosition());}
         bool operator <=(m3vcfRecord &record){return(BasePositionVal<=record.getBasePosition());}
         bool operator ==(m3vcfRecord &record)
@@ -175,31 +184,12 @@ public:
             return true;
         }
         
-        
-    void writeVcfRecordGenotypes(IFILE filePtr, m3vcfBlockHeader &ThisHeader)
-    {
-        vector<AlleleType> tempAlleles(numUniqueReps,'0');
-        
-        for(int i=0; i<numAltHaplo; i++)
-            tempAlleles[altHaploIndex[i]]='1';
-        
-        ifprintf(filePtr,"GT");
-        
-        int HapCount = 0;
-        for(int i=0; i<ThisHeader.getNumSamples(); i++)
-        {
-            
-            ifprintf(filePtr, "\t%c",tempAlleles[ThisHeader.getUniqueIndexMap(HapCount++)]);
-            
-            
-            if(ThisHeader.getSamplePloidy(i)==2)
-                ifprintf(filePtr, "|%c",tempAlleles[ThisHeader.getUniqueIndexMap(HapCount++)]);
-                       
-        }
-           ifprintf(filePtr, "\n");
+    // Function to print M3VCF Record as VCF format   
+    void writeVcfRecordGenotypes(IFILE filePtr, m3vcfBlockHeader &ThisHeader);
+    
+    
   
- 
-    }
+    
 //    const char* getIDStr() {return(myID.c_str());}
 //    const char* getRefStr() {return(myRef.c_str());}
 //    int getNumRefBases() {return(myRef.size());}
