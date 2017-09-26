@@ -168,7 +168,6 @@ bool m3vcfRecord::read  (IFILE filePtr,
 
     ThisBlock.AnotherMarkerRead();
 
-//abort();
     if(siteOnly)
     {
         // Do not store genotypes, so just consume the rest of the line.

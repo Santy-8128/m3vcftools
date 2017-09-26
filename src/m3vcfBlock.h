@@ -113,10 +113,13 @@ public:
         myRecords.resize(myBlockHeader.numMarkers);
     }
     
-    void writeVcfRecordGenotypes(IFILE filePtr, int index)
+    void writeVcfRecordGenotypes(IFILE filePtr, int index, bool siteOnly)
     {
         myRecords[index].write(filePtr, true);
-        myRecords[index].writeVcfRecordGenotypes(filePtr, myBlockHeader);
+        if(siteOnly==false)
+            myRecords[index].writeVcfRecordGenotypes(filePtr, myBlockHeader);
+        else
+            ifprintf(filePtr, "\n");
     }
     
     bool read(IFILE filePtr,  m3vcfHeader &ThisHeader,
@@ -145,7 +148,7 @@ public:
             int index=0;
             while(!myBlockHeader.isBlockFinished())
             {
-                myRecords[index++].read(filePtr,myBlockHeader);
+                myRecords[index++].read(filePtr,myBlockHeader,siteOnly);
             }
             return true;         
        }

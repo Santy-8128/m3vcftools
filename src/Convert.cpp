@@ -33,6 +33,7 @@ struct convert_args_t
     IFILE m3vcfFileStream;
     m3vcfHeader out_hdr;
     m3vcfBlock myM3vcfBlock;
+    bool VariantListOnly;
 
 
     //Common File and Argument Variables
@@ -102,11 +103,11 @@ static void InitializeHaplotypeData(convert_args_t &args)
 static void Analyse(convert_args_t &args)
 {
     int FirstBlock=0;
-    while(args.myM3vcfBlock.read(args.m3vcfFileStream, args.out_hdr))
+    while(args.myM3vcfBlock.read(args.m3vcfFileStream, args.out_hdr, args.VariantListOnly))
     {
         for(int i=FirstBlock++==0?0:1; i<args.myM3vcfBlock.getNumMarkers(); i++)
         {
-            args.myM3vcfBlock.writeVcfRecordGenotypes(args.vcfFileStream, i);
+            args.myM3vcfBlock.writeVcfRecordGenotypes(args.vcfFileStream, i, args.VariantListOnly );
         }
     }
        
@@ -136,7 +137,7 @@ static void usage(convert_args_t &args)
     fprintf(stderr, "\n");
     fprintf(stderr, " Options:\n");
     fprintf(stderr, "       --no-version               do not append version and command line to the header\n");
-//  fprintf(stderr, "   -S, --samples-file [^]<file>   file of samples to include (or exclude with \"^\" prefix)\n");
+    fprintf(stderr, "   -G, --drop-genotypes <file>            Write output to a file [standard output]\n");
     fprintf(stderr, "   -o, --output <file>            Write output to a file [standard output]\n");
     fprintf(stderr, "   -O, --output-type <z|v>        z: compressed VCF, v: uncompressed VCF [z] \n");
     fprintf(stderr, "\n");
@@ -155,21 +156,23 @@ int main_m3vcfconvert(int argc, char *argv[])
     args.record_cmd_line = 1;
     args.sample_include_list = NULL;
     args.sample_exlcude_list = NULL;
+    args.VariantListOnly=false;
     
     static struct option loptions[] =
     {
-//        {"samples-file",required_argument,NULL,'S'},
+        {"drop-genotypes",no_argument,NULL,'G'},
         {"output",required_argument,NULL,'o'},
         {"output-type",required_argument,NULL,'O'},
         {"no-version",no_argument,NULL,8},
         {NULL,0,NULL,0}
     };
 
-    while ((c = getopt_long(argc, argv, "b:o:O:kS:",loptions,NULL)) >= 0)
+    while ((c = getopt_long(argc, argv, "o:O:G",loptions,NULL)) >= 0)
     {
         switch (c) {
             case 'o': args.output_fname = optarg; break;
             case 'S': args.sample_include_list = optarg; break;
+            case 'G': args.VariantListOnly=true; break;
             case 'O':
                 switch (optarg[0]) {
                     case 'z': args.output_type = ZIPVCF; break;
