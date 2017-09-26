@@ -147,7 +147,7 @@ static void FlushFirstFileNonOverlappingPart(concat_args_t &args)
     // Use ReadStatus to see if the end of firstFile is reached before the start
     // position of the second file. This is ojectively the first file, so does
     // NOT need any phase swapping
-    while(ReadStatus && args.firstFileBlockHeader.getEndBasePosition()<=args.start_pos[1])
+    while(ReadStatus && args.firstFileBlockHeader.getEndBasePosition()<args.start_pos[1])
     {
         args.outFile.writeBlock(args.firstFileBlockHeader);
         while(!args.firstFileBlockHeader.isBlockFinished())
@@ -258,7 +258,7 @@ static void FlushSecondFileBlockNonOverlappingPart(int chunkNo, concat_args_t &a
         }
         ReadStatus=args.SecondFileBlock.readHeader(args.secondFile,args.out_hdr);
     }
-    while(ReadStatus && args.SecondFileBlock.getEndBasePosition()<=args.start_pos[chunkNo+1]);
+    while(ReadStatus && args.SecondFileBlock.getEndBasePosition()<args.start_pos[chunkNo+1]);
 
     // If end of second file is reached before the beginning of the next and if this is not
     // the last pair of chunks, then throw and error for non-overlapping
