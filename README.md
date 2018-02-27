@@ -25,8 +25,9 @@ pip install --user cget --ignore-installed six
 
 
 ## Installation
-The easiest way to install m3vcftools is to setup a dev environment cmake directly.
+The easiest way to install m3vcftools is to git clone followed by using cget and cmake directly.
 ```bash
+git clone https://github.com/Santy-8128/m3vcftools
 cd m3vcftools
 cget install -f ./requirements.txt                      # Install dependencies locally.
 mkdir build && cd build                                 # Create out of source build directory.
